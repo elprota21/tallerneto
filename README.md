@@ -52,9 +52,8 @@ pantallas.
 ## Versiones
 
 - **1.3.1 (2026-11-21)**: terminología — en toda la app se dice
-  «unidad / unidades» en vez de «guagua» (orden de Miguel: es el
-  término correcto y profesional). Solo textos; sin cambios de
-  funciones.
+  «unidad / unidades», el término correcto y profesional (orden de
+  Miguel). Solo textos; sin cambios de funciones.
 - **1.3.0 (2026-11-21)**: la tanda de marca y autonomía —
   **logo oficial** (la unidad con la llave, elegido por Miguel) como
   icono y en la pantalla de entrada, y la **paleta del panel nuevo**
