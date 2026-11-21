@@ -25,7 +25,7 @@ import 'repositorio.dart';
 ///     Combustible», PIN 1234.
 ///   · Catálogo de 6 trabajos, 6 vehículos, 17 piezas (P-17 sin
 ///     stock: la pide MEC-01 urgente), trabajos en estados
-///     mixtos, 3 guaguas lavadas hoy, 14 despachos, el tanque con
+///     mixtos, 3 unidades lavadas hoy, 14 despachos, el tanque con
 ///     recepciones (diésel cómodo, gasolina BAJO el umbral) y 2
 ///     solicitudes de piezas (una pendiente urgente, una pedida).
 /// La app funciona COMPLETA así: registrar trabajos, ver el pago y
@@ -772,7 +772,7 @@ class RepositorioDemo extends RepositorioTaller {
               marcadaEn: _lavadasHoy[v.id],
               marcadaPorNombre:
                   _lavadasHoy.containsKey(v.id) ? 'Coordinador de Lavado' : null,
-              // El marcado de esta guagua está en la cola de
+              // El marcado de esta unidad está en la cola de
               // salida (aún no enviado).
               pendienteEnvio: _cola.contiene('lavado', v.id),
             ),
@@ -800,7 +800,7 @@ class RepositorioDemo extends RepositorioTaller {
       throw const ErrorServidor(mensajeModuloExtra);
     }
     if (_lavadasHoy.containsKey(vehiculoId)) {
-      // Anti-duplicado: una guagua, una vez por día (como el servidor).
+      // Anti-duplicado: una unidad, una vez por día (como el servidor).
       final v = _vehiculos.firstWhere((x) => x.id == vehiculoId);
       throw ErrorServidor('El vehículo ${v.codigo} ya está marcado como lavado hoy');
     }

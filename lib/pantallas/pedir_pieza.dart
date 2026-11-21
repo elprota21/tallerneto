@@ -276,7 +276,7 @@ class _PantallaPedirPiezaState extends State<PantallaPedirPieza> {
             controller: _nota,
             decoration: const InputDecoration(
               labelText: 'Nota (opcional)',
-              hintText: 'Ej.: la guagua no sale sin esto',
+              hintText: 'Ej.: la unidad no sale sin esto',
               border: OutlineInputBorder(),
             ),
           ),

@@ -96,7 +96,7 @@ class PantallaLavado extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     datos.faltan.isEmpty
-                        ? '¡Todas las guaguas quedaron lavadas hoy! 🎉'
+                        ? '¡Todas las unidades quedaron lavadas hoy! 🎉'
                         : 'Faltan: ${datos.faltan.map((v) => v.vehiculo.codigo).join(', ')}',
                     style: TextStyle(color: cs.onPrimaryContainer),
                   ),
@@ -110,7 +110,7 @@ class PantallaLavado extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           const Text(
-            'Toca una guagua para marcarla lavada (o desmarcarla).',
+            'Toca una unidad para marcarla lavada (o desmarcarla).',
             style: TextStyle(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),

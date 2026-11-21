@@ -105,7 +105,7 @@ class ColaSalida {
   }
 
   /// Añade un registro a la cola. Si ya había uno igual (mismo
-  /// tipo y registro — ej.: marcar y desmarcar la misma guagua),
+  /// tipo y registro — ej.: marcar y desmarcar la misma unidad),
   /// se REEMPLAZA: lo que vale es la última acción.
   Future<void> agregar(ElementoCola elemento) async {
     _items.removeWhere(

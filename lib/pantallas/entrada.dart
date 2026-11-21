@@ -59,7 +59,7 @@ class _PantallaEntradaState extends State<PantallaEntrada> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Logo oficial de TallerNeto (el #2 elegido por
-                  // Miguel: la guagua con la llave de parrilla).
+                  // Miguel: la unidad con la llave de parrilla).
                   Center(
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(22),

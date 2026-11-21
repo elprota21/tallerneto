@@ -13,7 +13,7 @@ import 'servicios/tema.dart';
 ///    a destajo, o su sueldo si cobra fijo. Administración valida o
 ///    rechaza cada trabajo en el panel; solo lo validado paga.
 ///  - El COORDINADOR DE LAVADO (si la empresa tiene el módulo activo)
-///    marca las guaguas lavadas del día; el reporte le llega solo a
+///    marca las unidades lavadas del día; el reporte le llega solo a
 ///    administración.
 /// Tema M3 con MODO NOCHE/DÍA guardado en el teléfono, y
 /// actualización automática dentro de la app desde la 1.0.0.

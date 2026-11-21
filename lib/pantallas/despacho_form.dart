@@ -248,7 +248,7 @@ class _PantallaDespachoFormState extends State<PantallaDespachoForm> {
                       child: Text(
                         'Tu empresa no muestra precios en la app: el costo '
                         'de este despacho lo calcula administración con el '
-                        'precio vigente. Tú solo anotas la guagua, los '
+                        'precio vigente. Tú solo anotas la unidad, los '
                         'galones y el odómetro.',
                       ),
                     ),

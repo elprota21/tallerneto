@@ -19,7 +19,7 @@ class ErrorServidor implements Exception {
 ///
 /// La app sirve a DOS roles con la misma interfaz:
 ///  - mecanico: registra trabajos y ve su pago (destajo o sueldo).
-///  - lavado: marca las guaguas lavadas del día (si la empresa
+///  - lavado: marca las unidades lavadas del día (si la empresa
 ///    tiene el módulo de lavado activo).
 ///
 /// Implementación actual: [RepositorioDemo] (sin servidor). Cuando

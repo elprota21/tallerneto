@@ -105,7 +105,7 @@ class Empresa {
 
   /// Precios visibles en la app (servidor/config-ampliada.sql):
   /// apagado = el despachador NO ve ni escribe costos (solo
-  /// guagua, galones, odómetro y proveedor); el costo sale del
+  /// unidad, galones, odómetro y proveedor); el costo sale del
   /// precio vigente que administración fija en el panel.
   /// Sin dato del servidor = encendido (comportamiento clásico).
   final bool preciosEnApp;

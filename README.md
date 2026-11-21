@@ -6,7 +6,7 @@ Una sola app, funciones según el ROL de quien entra:
 |---|---|---|
 | Mecánico a destajo | `MEC-01` | Inicio con «Llevo ganado» (suma de trabajos validados del mes) y «En revisión», Registrar trabajo por pasos, Historial, Perfil, y **solicitudes de piezas**: botón «Pedir pieza» + el estado de las suyas (pendiente / en pedido / recibida / rechazada con el motivo); al registrar un trabajo, atajo «Pedir esta pieza» en las piezas sin stock |
 | Mecánico con sueldo | `MEC-02` | Igual, pero el Inicio muestra «Tu sueldo: RD$35,000» y sus trabajos como productividad |
-| Coordinador de lavado | `LAV-01` | Interfaz de lavado: guaguas de hoy con marcado/desmarcado y resumen «Lavadas hoy: X de Y» (solo si la empresa tiene el módulo activo) |
+| Coordinador de lavado | `LAV-01` | Interfaz de lavado: unidades de hoy con marcado/desmarcado y resumen «Lavadas hoy: X de Y» (solo si la empresa tiene el módulo activo) |
 | Despachador de combustible | `COM-01` | Interfaz de combustible: **tarjeta del tanque por tipo** («Diésel: quedan X gal», con «de N gal · P%» si la empresa fijó la capacidad, alerta «Poco combustible» y días estimados), botón **«Recibir combustible»** (tipo + galones + costo por galón + proveedor opcional; se rechaza si se pasa de la capacidad del tanque), despachos de hoy, total de galones del día y registrar despacho (vehículo + galones + tipo + odómetro que no puede bajar + costo por galón; el despacho descuenta del tanque y se rechaza si el saldo no alcanza) (solo si la empresa tiene el módulo activo) |
 
 PIN demo de todos: **1234**. Tema M3 con **modo noche/día** en el
@@ -27,7 +27,7 @@ La app funciona COMPLETA sin backend: los datos semilla viven en
 `lib/datos/repositorio_demo.dart` y son equivalentes a los del panel
 demo y a la semilla SQL («Transportes Demo», lavado y combustible
 activados, catálogo de 6 trabajos, trabajos en estados mixtos, 3
-guaguas ya lavadas hoy, 14 despachos, tanque con recepciones —
+unidades ya lavadas hoy, 14 despachos, tanque con recepciones —
 diésel 391 gal cómodo, gasolina 40 gal BAJO el umbral: alerta
 visible— y 2 solicitudes de piezas). Registrar trabajos, marcar
 lavados, despachar, recibir combustible y pedir piezas funciona en
@@ -51,8 +51,12 @@ pantallas.
 
 ## Versiones
 
+- **1.3.1 (2026-11-21)**: terminología — en toda la app se dice
+  «unidad / unidades» en vez de «guagua» (orden de Miguel: es el
+  término correcto y profesional). Solo textos; sin cambios de
+  funciones.
 - **1.3.0 (2026-11-21)**: la tanda de marca y autonomía —
-  **logo oficial** (la guagua con la llave, elegido por Miguel) como
+  **logo oficial** (la unidad con la llave, elegido por Miguel) como
   icono y en la pantalla de entrada, y la **paleta del panel nuevo**
   (grafito/ámbar) en modo día y noche; **cola de salida offline**:
   trabajos, lavados, despachos, recepciones y solicitudes nacen con

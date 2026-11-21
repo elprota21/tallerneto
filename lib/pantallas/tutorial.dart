@@ -79,7 +79,7 @@ List<_Paso> _pasosPara(String rol) {
           Icons.build_outlined,
           'Registra tus trabajos',
           'Al terminar un trabajo, tócalo en «Registrar trabajo»: '
-              'elige la guagua, el tipo de trabajo y las piezas que '
+              'elige la unidad, el tipo de trabajo y las piezas que '
               'usaste. Queda anotado con la fecha de hoy.',
         ),
         _Paso(
@@ -116,14 +116,14 @@ List<_Paso> _pasosPara(String rol) {
         _Paso(
           Icons.local_car_wash_outlined,
           'Tu parrilla del día',
-          'Aquí están todas las guaguas de la empresa: en verde '
+          'Aquí están todas las unidades de la empresa: en verde '
               'las que ya se lavaron hoy y en rojo las que faltan. '
               'El conteo del día se ve arriba.',
         ),
         _Paso(
           Icons.touch_app_outlined,
           'Toca para marcar',
-          'Cuando una guagua quede lavada, tócala y confirma: '
+          'Cuando una unidad quede lavada, tócala y confirma: '
               'queda registrado quién la marcó y a qué hora. Si te '
               'equivocas, la misma tarjeta permite desmarcarla.',
         ),
@@ -139,7 +139,7 @@ List<_Paso> _pasosPara(String rol) {
         _Paso(
           Icons.local_gas_station_outlined,
           'Despacha con odómetro',
-          'Cada despacho dice la guagua, los galones y el '
+          'Cada despacho dice la unidad, los galones y el '
               'odómetro. El odómetro nunca puede bajar del último '
               'registrado: esa es la regla que cuida el combustible.',
         ),
