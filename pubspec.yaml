@@ -1,0 +1,29 @@
+name: tallerneto_mecanico
+description: "TallerNeto — app del personal del taller: el mecánico registra sus trabajos (pago a destajo o sueldo) y el coordinador de lavado marca las guaguas lavadas del día."
+publish_to: 'none'
+
+# Versión de la app: 1.0.0 (primer release público, con actualización
+# automática dentro de la app desde esta primera versión).
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.14.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # En este SDK, flutter/material está deprecado a favor de material_ui
+  # (misma API; es lo que usa la app de RutaNeto).
+  material_ui: ^1.1.0
+  http: ^1.2.0
+  package_info_plus: ^8.0.0
+  path_provider: ^2.1.0
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

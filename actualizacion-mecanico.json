@@ -1,0 +1,6 @@
+{
+  "versionCode": 1,
+  "versionName": "1.0.0",
+  "apkUrl": "https://github.com/elprota21/tallerneto/releases/download/v1.0.0/TallerNeto-Mecanico.apk",
+  "notas": "Primera versión de TallerNeto: trabajos y pago de mecánicos (a destajo o con sueldo), módulo de lavado y módulo de combustible. Funciona en modo demostración completo, sin servidor."
+}

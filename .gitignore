@@ -1,0 +1,24 @@
+# Firma permanente y clave: NUNCA a GitHub (sin esta firma exacta,
+# Android rechaza las actualizaciones).
+firma/
+
+# Entorno local de compilación de esta VM
+.gradle-home/
+.ndk
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.packages
+untranslated_messages.txt
+
+# Android local
+android/local.properties
+android/**/GeneratedPluginRegistrant.java
+*.iml
+.idea/
+
+# Activos de la release (van como adjuntos de GitHub Releases, no en git)
+TallerNeto-Mecanico.apk
+qr-descarga.png
