@@ -3,9 +3,13 @@ import 'package:material_ui/material_ui.dart';
 import '../datos/repositorio.dart';
 
 import 'comun.dart';
+import 'pedir_pieza.dart';
 
-/// Inicio del mecánico: saludo, su dinero según su modo de pago y
-/// sus trabajos de hoy con su estado.
+/// Inicio del mecánico: saludo, su dinero según su modo de pago,
+/// sus trabajos de hoy con su estado, y SUS SOLICITUDES DE PIEZAS
+/// con el botón «Pedir pieza» (administración las gestiona en el
+/// panel; aquí ve si están pendientes, en pedido, recibidas o
+/// rechazadas con el motivo).
 ///  - Destajo: «Llevo ganado RD$X» (validados del mes) y
 ///    «RD$Y en revisión» (pendientes).
 ///  - Sueldo: «Tu sueldo: RD$X» y el conteo de trabajos realizados;
@@ -116,6 +120,68 @@ class PantallaInicio extends StatelessWidget {
                     ],
                   ],
                 ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Mis solicitudes de piezas (${datos.solicitudes.length})',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.tonalIcon(
+              onPressed: () async {
+                final ok = await Navigator.of(context).push<bool>(
+                  MaterialPageRoute(
+                    builder: (_) => PantallaPedirPieza(repo: repo),
+                  ),
+                );
+                if (ok == true && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text(
+                            'Solicitud enviada: administración la revisa en el panel.')),
+                  );
+                }
+              },
+              icon: const Icon(Icons.add_shopping_cart_outlined),
+              label: const Text('Pedir pieza'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (datos.solicitudes.isEmpty)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                    'No has pedido piezas. Si una pieza no está en stock, '
+                    'pídela aquí y administración la encarga.'),
+              ),
+            ),
+          ...datos.solicitudes.map(
+            (s) => Card(
+              child: ListTile(
+                leading: const Icon(Icons.inventory_2_outlined),
+                title: Text('${s.nombrePieza} × ${s.cantidad}'),
+                subtitle: Text(
+                  '${s.vehiculoId != null ? '${etiquetaVehiculo(s.vehiculoId!)} · ' : ''}'
+                  '${fechaCorta(s.fecha)}'
+                  '${s.esUrgente ? ' · URGENTE' : ''}'
+                  '${s.estado == 'rechazada' && s.notaAdmin != null ? '\nMotivo: ${s.notaAdmin}' : ''}'
+                  '${s.estado == 'recibida' && s.cantidadRecibida != null ? '\nEntraron ${s.cantidadRecibida} al inventario' : ''}',
+                ),
+                trailing: ChipEstadoSolicitud(estado: s.estado),
               ),
             ),
           ),
