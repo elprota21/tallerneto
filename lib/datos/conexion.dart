@@ -8,9 +8,11 @@
 /// proyecto vacío de la otra cuenta).
 ///
 /// CUANDO EL PROYECTO EXISTA, para conectar la app de verdad:
-///   1. En Supabase: aplicar servidor/esquema.sql, después
-///      servidor/trabajos.sql, servidor/lavado.sql y
-///      servidor/combustible.sql.
+///   1. En Supabase: aplicar en orden servidor/esquema.sql,
+///      servidor/trabajos.sql, servidor/lavado.sql,
+///      servidor/combustible.sql, servidor/tanque.sql y
+///      servidor/solicitudes.sql (con sus datos-*-demo.sql si se
+///      quiere la demo sembrada).
 ///   2. Rellenar aquí la URL del proyecto y la llave «anon» pública
 ///      (la misma que usa el panel en panel/src/config.ts; la llave
 ///      anon es pública por diseño — la seguridad la dan las
@@ -23,6 +25,8 @@
 ///        pr_marcar_lavado / pr_desmarcar_lavado → DatosLavado
 ///        pr_datos_combustible(quien, token)     → DatosCombustible
 ///        pr_registrar_despacho(...)             → DatosCombustible
+///        pr_registrar_recepcion(...)            → DatosCombustible
+///        pr_solicitar_pieza(...)                → DatosMecanico
 ///      (mismo patrón que la app de RutaNeto, lib/datos/
 ///      repositorio_real.dart) y devolverlo en `crearRepositorio()`
 ///      de repositorio.dart cuando [hayConexion] sea true.
