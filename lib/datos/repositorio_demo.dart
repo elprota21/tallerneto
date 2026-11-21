@@ -12,12 +12,18 @@ import 'repositorio.dart';
 /// Datos semilla LOCALES equivalentes a los del panel demo
 /// (panel/src/data/demoAdapter.ts) y a la semilla del servidor
 /// (servidor/datos-demo.sql + datos-trabajos-demo.sql +
-/// datos-lavado-demo.sql):
-///   · Empresa «Transportes Demo», módulo de lavado ACTIVADO.
+/// datos-lavado-demo.sql + datos-combustible-demo.sql +
+/// datos-tanque-demo.sql + datos-solicitudes-demo.sql):
+///   · Empresa «Transportes Demo», módulos de lavado y
+///     combustible ACTIVADOS.
 ///   · MEC-01 (destajo) y MEC-02 (sueldo RD$35,000/mes), PIN 1234.
-///   · LAV-01 «Coordinador de Lavado», PIN 1234.
-///   · Catálogo de 6 trabajos, 6 vehículos, 16 piezas, trabajos en
-///     estados mixtos y 3 guaguas ya lavadas hoy.
+///   · LAV-01 «Coordinador de Lavado», COM-01 «Despachador de
+///     Combustible», PIN 1234.
+///   · Catálogo de 6 trabajos, 6 vehículos, 17 piezas (P-17 sin
+///     stock: la pide MEC-01 urgente), trabajos en estados
+///     mixtos, 3 guaguas lavadas hoy, 14 despachos, el tanque con
+///     recepciones (diésel cómodo, gasolina BAJO el umbral) y 2
+///     solicitudes de piezas (una pendiente urgente, una pedida).
 /// La app funciona COMPLETA así: registrar trabajos, ver el pago y
 /// marcar lavados, sin backend. Al conectar Supabase (conexion.dart)
 /// esta clase se sustituye por la real sin tocar las pantallas.
@@ -109,6 +115,9 @@ class RepositorioDemo extends RepositorioTaller {
     Pieza(id: 'pza-14', codigo: 'P-14', nombre: 'Refrigerante (galón)', stock: 7, costo: 720),
     Pieza(id: 'pza-15', codigo: 'P-15', nombre: 'Kit de clutch', stock: 1, costo: 18750),
     Pieza(id: 'pza-16', codigo: 'P-16', nombre: 'Foco delantero', stock: 5, costo: 2950),
+    // P-17 sin stock a propósito (como datos-solicitudes-demo.sql):
+    // es la pieza que MEC-01 pide urgente en la demo.
+    Pieza(id: 'pza-17', codigo: 'P-17', nombre: 'Bomba de agua', stock: 0, costo: 9800),
   ];
 
   static const _tipos = <TipoTrabajo>[
@@ -130,6 +139,22 @@ class RepositorioDemo extends RepositorioTaller {
 
   /// Despachos de combustible de la demo (semilla + nuevos).
   final List<DespachoCombustible> _despachos = [];
+
+  /// Recepciones de combustible de la demo (cargas al tanque).
+  final List<RecepcionCombustible> _recepciones = [];
+
+  /// Solicitudes de piezas de la demo (semilla + nuevas), con su
+  /// dueño en [_duenosSol] (la app solo ve las del propio mecánico).
+  final List<SolicitudPieza> _solicitudes = [];
+  final Map<String, String> _duenosSol = {};
+
+  /// Umbrales de «poco combustible» de la demo (los defaults del
+  /// servidor; en producción los fija admin en el panel).
+  static const _umbralesTanque = <String, double>{
+    'diesel': 100,
+    'gasolina': 50,
+    'glp': 30,
+  };
 
   static const _tiposCombustible = <TipoCombustible>[
     TipoCombustible(tipo: 'diesel', precioSugerido: 250),
@@ -249,6 +274,63 @@ class RepositorioDemo extends RepositorioTaller {
       des('des-13', 'veh-5', 0, '09:30', 15, 210880, 252),
       des('des-14', 'veh-6', 2, '10:00', 10, 178900, 250),
     ]);
+
+    // Recepciones del tanque (como datos-tanque-demo.sql): contra
+    // los 209 galones diésel despachados, el diésel queda cómodo
+    // (391) y la GASOLINA queda bajo el umbral (40 < 50: alerta).
+    RecepcionCombustible rec(String id, String tipo, int diasAtras,
+            String hora, double galones, double costo,
+            String? proveedor, String? nota) =>
+        RecepcionCombustible(
+          id: id,
+          tipo: tipo,
+          galones: galones,
+          costoUnitario: costo,
+          total: (galones * costo * 100).round() / 100,
+          proveedor: proveedor,
+          nota: nota,
+          fecha: hace(diasAtras),
+          creadaEn: '${hace(diasAtras)}T$hora:00',
+        );
+    _recepciones.addAll([
+      rec('rec-1', 'diesel', 6, '07:20', 400, 245, 'Distribuidora Caribe',
+          'Carga inicial del tanque'),
+      rec('rec-2', 'diesel', 2, '07:35', 200, 248, 'Distribuidora Caribe', null),
+      rec('rec-3', 'gasolina', 4, '09:10', 40, 285, 'Estación Central', null),
+      rec('rec-4', 'glp', 3, '10:05', 80, 140, 'Gas del Este', null),
+    ]);
+
+    // Solicitudes de piezas (como datos-solicitudes-demo.sql):
+    // una pendiente URGENTE de MEC-01 (la bomba de agua sin stock,
+    // para el V-03) y una ya PEDIDA de MEC-02 (texto libre, V-05).
+    _duenosSol
+      ..['sol-1'] = 'usr-mec1'
+      ..['sol-2'] = 'usr-mec2';
+    _solicitudes.addAll([
+      SolicitudPieza(
+        id: 'sol-1',
+        piezaId: 'pza-17',
+        nombrePieza: 'Bomba de agua',
+        cantidad: 1,
+        vehiculoId: 'veh-3',
+        urgencia: 'urgente',
+        nota: 'La bomba está botando agua: sin esto el Fuso no sale del taller',
+        estado: 'pendiente',
+        fecha: hace(0),
+        creadaEn: '${hace(0)}T09:12:00',
+      ),
+      SolicitudPieza(
+        id: 'sol-2',
+        nombrePieza: 'Correa de accesorios',
+        cantidad: 2,
+        vehiculoId: 'veh-5',
+        urgencia: 'normal',
+        nota: 'La correa está cuarteada, conviene cambiarla esta semana',
+        estado: 'pedida',
+        fecha: hace(1),
+        creadaEn: '${hace(1)}T10:30:00',
+      ),
+    ]);
   }
 
   /// Dueño de cada trabajo de la semilla (el modelo Trabajo no lleva
@@ -350,6 +432,11 @@ class RepositorioDemo extends RepositorioTaller {
     double suma(String estado) => mios
         .where((t) => t.estado == estado && t.fecha.compareTo(mes) >= 0)
         .fold(0.0, (s, t) => s + t.precio);
+    // Solo MIS solicitudes (espejo del servidor): otro mecánico
+    // no ve las mías ni yo las suyas.
+    final misSolicitudes =
+        _solicitudes.where((s) => _duenosSol[s.id] == u.id).toList()
+          ..sort((a, b) => b.creadaEn.compareTo(a.creadaEn));
     return DatosMecanico(
       usuario: u,
       empresa: _empresa,
@@ -359,6 +446,7 @@ class RepositorioDemo extends RepositorioTaller {
       trabajos: mios,
       totalValidadoMes: suma('validada'),
       totalPendienteMes: suma('pendiente'),
+      solicitudes: misSolicitudes,
     );
   }
 
@@ -407,6 +495,62 @@ class RepositorioDemo extends RepositorioTaller {
     _datosMecanico = _construirDatosMecanico(u);
     notifyListeners();
     return nuevo;
+  }
+
+  @override
+  Future<SolicitudPieza> solicitarPieza({
+    String? piezaId,
+    String? nombre,
+    required int cantidad,
+    String? vehiculoId,
+    String urgencia = 'normal',
+    String? nota,
+  }) async {
+    final u = _sesion;
+    if (u == null || u.rol != 'mecanico') {
+      throw const ErrorServidor(
+          'Solo un mecánico puede pedir piezas a administración');
+    }
+    if (cantidad <= 0) {
+      throw const ErrorServidor('La cantidad a pedir debe ser mayor que cero');
+    }
+    if (urgencia != 'normal' && urgencia != 'urgente') {
+      throw ErrorServidor('Urgencia no válida: $urgencia');
+    }
+    String nombreFinal;
+    if (piezaId != null) {
+      final piezas = _piezas.where((p) => p.id == piezaId);
+      if (piezas.isEmpty) {
+        throw const ErrorServidor('La pieza elegida no existe en el catálogo');
+      }
+      nombreFinal = piezas.first.nombre;
+    } else {
+      if (nombre == null || nombre.trim().isEmpty) {
+        throw const ErrorServidor('Escribe el nombre de la pieza que necesitas');
+      }
+      nombreFinal = nombre.trim();
+    }
+    if (vehiculoId != null && !_vehiculos.any((v) => v.id == vehiculoId)) {
+      throw const ErrorServidor('El vehículo indicado no existe');
+    }
+    _contador += 1;
+    final nueva = SolicitudPieza(
+      id: 'sol-nueva-$_contador',
+      piezaId: piezaId,
+      nombrePieza: nombreFinal,
+      cantidad: cantidad,
+      vehiculoId: vehiculoId,
+      urgencia: urgencia,
+      nota: (nota == null || nota.trim().isEmpty) ? null : nota.trim(),
+      estado: 'pendiente',
+      fecha: _hoy(),
+      creadaEn: DateTime.now().toIso8601String(),
+    );
+    _duenosSol[nueva.id] = u.id;
+    _solicitudes.insert(0, nueva);
+    _datosMecanico = _construirDatosMecanico(u);
+    notifyListeners();
+    return nueva;
   }
 
   // ---------- lavado ----------
@@ -487,6 +631,55 @@ class RepositorioDemo extends RepositorioTaller {
     return ultimo;
   }
 
+  /// Saldo del tanque de un tipo: Σ recepciones − Σ despachos
+  /// (espejo de pr__tanque_json del servidor).
+  double _saldoTanque(String tipo) {
+    final recibidos = _recepciones
+        .where((r) => r.tipo == tipo)
+        .fold(0.0, (s, r) => s + r.galones);
+    final despachados = _despachos
+        .where((d) => d.tipo == tipo)
+        .fold(0.0, (s, d) => s + d.galones);
+    return recibidos - despachados;
+  }
+
+  List<TanqueTipo> _construirTanque() {
+    final hoy = _hoy();
+    final desde14 = _iso(DateTime.now().subtract(const Duration(days: 13)));
+    return _tiposCombustible.map((t) {
+      final saldo = _saldoTanque(t.tipo);
+      final umbral = _umbralesTanque[t.tipo] ?? 0;
+      final consumo14 = _despachos
+          .where((d) =>
+              d.tipo == t.tipo &&
+              d.fecha.compareTo(desde14) >= 0 &&
+              d.fecha.compareTo(hoy) <= 0)
+          .fold(0.0, (s, d) => s + d.galones);
+      final promedio = consumo14 / 14;
+      return TanqueTipo(
+        tipo: t.tipo,
+        saldo: (saldo * 100).round() / 100,
+        umbral: umbral,
+        alerta: saldo <= umbral,
+        consumoPromedioDiario: (promedio * 100).round() / 100,
+        diasEstimados:
+            promedio > 0 ? ((saldo / promedio) * 10).round() / 10 : null,
+      );
+    }).toList();
+  }
+
+  /// Galones sin ceros de más (como trim_scale de Postgres):
+  /// 391 → «391», 40.5 → «40.5».
+  static String _fmtGal(double v) {
+    if (v == v.roundToDouble()) return v.toInt().toString();
+    var s = v.toStringAsFixed(2);
+    while (s.endsWith('0')) {
+      s = s.substring(0, s.length - 1);
+    }
+    if (s.endsWith('.')) s = s.substring(0, s.length - 1);
+    return s;
+  }
+
   DatosCombustible _construirDatosCombustible(Usuario u) {
     final hoy = _hoy();
     final deHoy = _despachos.where((d) => d.fecha == hoy).toList()
@@ -505,6 +698,7 @@ class RepositorioDemo extends RepositorioTaller {
       despachosHoy: deHoy,
       totalGalonesHoy: deHoy.fold(0.0, (s, d) => s + d.galones),
       totalCostoHoy: deHoy.fold(0.0, (s, d) => s + d.total),
+      tanque: _construirTanque(),
     );
   }
 
@@ -550,6 +744,16 @@ class RepositorioDemo extends RepositorioTaller {
           'El odómetro ($odometro) es menor que el último registrado '
           '($ultimo) para el vehículo ${v.codigo}: revísalo');
     }
+    // Inventario del tanque (espejo del servidor): el despacho
+    // descuenta del saldo del tipo y no puede pasarse de lo que
+    // queda. El mensaje es el mismo texto que devuelve el servidor.
+    final saldo = _saldoTanque(tipo);
+    if (saldo < galones) {
+      const etiquetas = {'diesel': 'diésel', 'gasolina': 'gasolina', 'glp': 'GLP'};
+      throw ErrorServidor(
+          'Tanque de ${etiquetas[tipo] ?? tipo} sin suficiente combustible: '
+          'quedan ${_fmtGal(saldo)} gal');
+    }
     _contador += 1;
     final nuevo = DespachoCombustible(
       id: 'des-nuevo-$_contador',
@@ -568,5 +772,52 @@ class RepositorioDemo extends RepositorioTaller {
     _datosCombustible = _construirDatosCombustible(u);
     notifyListeners();
     return nuevo;
+  }
+
+  @override
+  Future<RecepcionCombustible> registrarRecepcion({
+    required String tipo,
+    required double galones,
+    required double costoUnitario,
+    String? proveedor,
+    String? nota,
+  }) async {
+    final u = _sesion;
+    if (u == null || !u.esCombustible) {
+      throw const ErrorServidor(
+          'Solo el encargado de combustible registra recepciones');
+    }
+    if (!_empresa.combustibleActivo) {
+      throw const ErrorServidor(
+          'El módulo de combustible no está activo en esta empresa');
+    }
+    if (!_tiposCombustible.any((t) => t.tipo == tipo)) {
+      throw ErrorServidor('Tipo de combustible no válido: $tipo');
+    }
+    if (galones <= 0) {
+      throw const ErrorServidor(
+          'La cantidad de galones recibidos debe ser mayor que cero');
+    }
+    if (costoUnitario < 0) {
+      throw const ErrorServidor(
+          'El costo por galón no puede ser negativo');
+    }
+    _contador += 1;
+    final nueva = RecepcionCombustible(
+      id: 'rec-nueva-$_contador',
+      tipo: tipo,
+      galones: galones,
+      costoUnitario: costoUnitario,
+      total: (galones * costoUnitario * 100).round() / 100,
+      proveedor:
+          (proveedor == null || proveedor.trim().isEmpty) ? null : proveedor.trim(),
+      nota: (nota == null || nota.trim().isEmpty) ? null : nota.trim(),
+      fecha: _hoy(),
+      creadaEn: DateTime.now().toIso8601String(),
+    );
+    _recepciones.insert(0, nueva);
+    _datosCombustible = _construirDatosCombustible(u);
+    notifyListeners();
+    return nueva;
   }
 }
