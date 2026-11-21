@@ -1,6 +1,1 @@
-{
-  "versionCode": 1,
-  "versionName": "1.0.0",
-  "apkUrl": "https://github.com/elprota21/tallerneto/releases/download/v1.0.0/TallerNeto-Mecanico.apk",
-  "notas": "Primera versión de TallerNeto: trabajos y pago de mecánicos (a destajo o con sueldo), módulo de lavado y módulo de combustible. Funciona en modo demostración completo, sin servidor."
-}
+{"apkUrl":"https://github.com/elprota21/tallerneto/releases/download/v1.1.0/TallerNeto-Mecanico.apk","notas":"Novedades: inventario del tanque de combustible (el despachador ve cuánto queda de cada tipo, con alerta de poco combustible y días estimados, y puede registrar las recepciones; los despachos descuentan del tanque) y solicitudes de piezas: el mecánico pide piezas sin stock desde la app y ve el estado de sus pedidos. Sigue en modo demostración completo, sin servidor.","versionCode":2,"versionName":"1.1.0"}
