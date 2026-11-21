@@ -10,9 +10,11 @@
 /// CUANDO EL PROYECTO EXISTA, para conectar la app de verdad:
 ///   1. En Supabase: aplicar en orden servidor/esquema.sql,
 ///      servidor/trabajos.sql, servidor/lavado.sql,
-///      servidor/combustible.sql, servidor/tanque.sql y
-///      servidor/solicitudes.sql (con sus datos-*-demo.sql si se
-///      quiere la demo sembrada).
+///      servidor/combustible.sql, servidor/tanque.sql,
+///      servidor/solicitudes.sql y servidor/roles.sql (con sus
+///      datos-*-demo.sql si se quiere la demo sembrada). El login
+///      devuelve `rolAdicional` además de `rol`: con dos roles con
+///      pantalla, la app pide elegir función al entrar.
 ///   2. Rellenar aquí la URL del proyecto y la llave «anon» pública
 ///      (la misma que usa el panel en panel/src/config.ts; la llave
 ///      anon es pública por diseño — la seguridad la dan las

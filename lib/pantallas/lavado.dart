@@ -58,12 +58,12 @@ class PantallaLavado extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
     if (!datos.empresa.lavadoActivo) {
+      // Módulo extra no contratado: mensaje amable y comercial.
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
           child: Text(
-            'El módulo de lavado no está activo en tu empresa. '
-            'Es una función adicional: la activa administración con TallerNeto.',
+            mensajeModuloExtra,
             textAlign: TextAlign.center,
           ),
         ),
@@ -131,10 +131,19 @@ class PantallaLavado extends StatelessWidget {
                         v.lavadoHoy ? FontWeight.bold : FontWeight.normal,
                   ),
                 ),
-                subtitle: Text(v.lavadoHoy
-                    ? 'Lavada a las ${horaCorta(v.marcadaEn)}'
-                        '${v.marcadaPorNombre != null ? ' · por ${v.marcadaPorNombre}' : ''}'
-                    : 'Placa ${v.vehiculo.placa} · sin lavar hoy'),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(v.lavadoHoy
+                        ? 'Lavada a las ${horaCorta(v.marcadaEn)}'
+                            '${v.marcadaPorNombre != null ? ' · por ${v.marcadaPorNombre}' : ''}'
+                        : 'Placa ${v.vehiculo.placa} · sin lavar hoy'),
+                    if (v.pendienteEnvio) ...[
+                      const SizedBox(height: 4),
+                      const ChipPendienteEnvio(),
+                    ],
+                  ],
+                ),
                 trailing: const Icon(Icons.touch_app_outlined),
                 onTap: () => _tocar(context, v),
               ),

@@ -98,6 +98,10 @@ class _PantallaHistorialState extends State<PantallaHistorial> {
                               const SizedBox(height: 4),
                               Text(etiquetaVehiculo(t.vehiculoId)),
                               Text(fechaCorta(t.fecha)),
+                              if (t.pendienteEnvio) ...[
+                                const SizedBox(height: 6),
+                                const ChipPendienteEnvio(),
+                              ],
                               if (t.descripcion != null) ...[
                                 const SizedBox(height: 4),
                                 Text(t.descripcion!),

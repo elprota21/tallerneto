@@ -4,12 +4,22 @@
 /// con la misma forma.
 library;
 
+/// Mensaje AMABLE Y COMERCIAL cuando el usuario intenta usar un
+/// módulo EXTRA (lavado o combustible) que su empresa aún no
+/// tiene activo (orden de Miguel): nada de errores técnicos —
+/// esto también es vitrina de venta.
+const String mensajeModuloExtra =
+    'Este módulo es un servicio extra y tu empresa aún no lo tiene activo. '
+    'Pídele la activación a tu proveedor: en cuanto se active, podrás '
+    'trabajar con él desde aquí mismo.';
+
 class Usuario {
   const Usuario({
     required this.id,
     required this.nombre,
     required this.codigo,
     required this.rol,
+    this.rolAdicional,
     this.modoPago = 'destajo',
     this.sueldoMonto,
   });
@@ -18,9 +28,14 @@ class Usuario {
   final String nombre;
   final String codigo;
 
-  /// 'mecanico' | 'lavado' (la app también la usa administración en
-  /// pruebas, pero sus pantallas son estas dos).
+  /// Rol principal: 'mecanico' | 'lavado' | 'combustible' |
+  /// 'almacen' | 'admin' (la app da pantalla a los tres primeros).
   final String rol;
+
+  /// Rol adicional opcional (servidor: usuarios.rol_adicional):
+  /// la misma persona con un segundo sombrero — por ejemplo un
+  /// mecánico que también es almacén. Null = solo el principal.
+  final String? rolAdicional;
 
   /// Solo mecánicos: 'destajo' (cobra la suma de trabajos validados)
   /// o 'sueldo' (salario fijo mensual).
@@ -31,11 +46,38 @@ class Usuario {
   bool get esLavado => rol == 'lavado';
   bool get esCombustible => rol == 'combustible';
 
+  /// Roles que tienen pantalla en la app, en orden principal →
+  /// adicional. El almacén y administración NO tienen pantalla
+  /// propia aquí (viven en el panel).
+  static const rolesConPantalla = ['mecanico', 'lavado', 'combustible'];
+
+  /// Mis roles CON pantalla de app (1 o 2). Si son 2, al entrar se
+  /// elige con cuál trabajar y se puede cambiar desde el Perfil.
+  /// Si el adicional es almacén, queda un solo rol de app y se
+  /// entra directo con él.
+  List<String> get rolesApp => [
+        for (final r in [rol, ?rolAdicional])
+          if (rolesConPantalla.contains(r)) r,
+      ];
+
+  bool get tieneDosRolesApp => rolesApp.length > 1;
+
+  /// Nombre legible de un rol (para el selector y el Perfil).
+  static String etiquetaDe(String r) => switch (r) {
+        'mecanico' => 'Mecánico',
+        'lavado' => 'Coordinador de lavado',
+        'combustible' => 'Despachador de combustible',
+        'almacen' => 'Almacén',
+        'admin' => 'Administración',
+        _ => r,
+      };
+
   factory Usuario.desdeJson(Map<String, dynamic> j) => Usuario(
         id: j['id'].toString(),
         nombre: j['nombre'].toString(),
         codigo: j['codigo'].toString(),
         rol: j['rol'].toString(),
+        rolAdicional: j['rolAdicional']?.toString(),
         modoPago: j['modoPago']?.toString() ?? 'destajo',
         sueldoMonto: (j['sueldoMonto'] as num?)?.toDouble(),
       );
@@ -47,6 +89,8 @@ class Empresa {
     required this.nombre,
     this.lavadoActivo = false,
     this.combustibleActivo = false,
+    this.preciosEnApp = true,
+    this.tutorialActivo = true,
   });
 
   final String id;
@@ -59,11 +103,24 @@ class Empresa {
   /// Módulo de combustible (extra por empresa): ídem.
   final bool combustibleActivo;
 
+  /// Precios visibles en la app (servidor/config-ampliada.sql):
+  /// apagado = el despachador NO ve ni escribe costos (solo
+  /// guagua, galones, odómetro y proveedor); el costo sale del
+  /// precio vigente que administración fija en el panel.
+  /// Sin dato del servidor = encendido (comportamiento clásico).
+  final bool preciosEnApp;
+
+  /// Modo tutorial de la empresa: apagado = la app no ofrece el
+  /// recorrido de bienvenida automáticamente.
+  final bool tutorialActivo;
+
   factory Empresa.desdeJson(Map<String, dynamic> j) => Empresa(
         id: j['id'].toString(),
         nombre: j['nombre'].toString(),
         lavadoActivo: j['lavadoActivo'] == true,
         combustibleActivo: j['combustibleActivo'] == true,
+        preciosEnApp: j['preciosEnApp'] != false,
+        tutorialActivo: j['tutorialActivo'] != false,
       );
 }
 
@@ -176,12 +233,31 @@ class Trabajo {
     this.descripcion,
     this.notaAdmin,
     this.piezas = const [],
+    this.pendienteEnvio = false,
   });
 
   final String id;
   final String vehiculoId;
   final String tipoTrabajoId;
   final String tipoNombre;
+
+  /// Cola de salida (offline): el registro está guardado en el
+  /// teléfono y aún no ha llegado al servidor.
+  final bool pendienteEnvio;
+
+  Trabajo copiarCon({bool? pendienteEnvio}) => Trabajo(
+        id: id,
+        vehiculoId: vehiculoId,
+        tipoTrabajoId: tipoTrabajoId,
+        tipoNombre: tipoNombre,
+        precio: precio,
+        estado: estado,
+        fecha: fecha,
+        descripcion: descripcion,
+        notaAdmin: notaAdmin,
+        piezas: piezas,
+        pendienteEnvio: pendienteEnvio ?? this.pendienteEnvio,
+      );
 
   /// Precio del catálogo AL REGISTRAR (copia): no cambia si la
   /// administración edita el catálogo después.
@@ -275,10 +351,15 @@ class VehiculoLavado {
     required this.lavadoHoy,
     this.marcadaEn,
     this.marcadaPorNombre,
+    this.pendienteEnvio = false,
   });
 
   final Vehiculo vehiculo;
   final bool lavadoHoy;
+
+  /// El marcado/desmarcado de hoy está en la cola de salida
+  /// (offline): guardado en el teléfono, aún no enviado.
+  final bool pendienteEnvio;
 
   /// ISO con hora de cuándo se marcó (si está lavada).
   final String? marcadaEn;
@@ -327,12 +408,31 @@ class DespachoCombustible {
     required this.fecha,
     required this.creadaEn,
     this.despachadorNombre,
+    this.pendienteEnvio = false,
   });
 
   final String id;
   final String vehiculoId;
   final String vehiculoCodigo;
   final double galones;
+
+  /// Cola de salida (offline): guardado en el teléfono, sin enviar.
+  final bool pendienteEnvio;
+
+  DespachoCombustible copiarCon({bool? pendienteEnvio}) => DespachoCombustible(
+        id: id,
+        vehiculoId: vehiculoId,
+        vehiculoCodigo: vehiculoCodigo,
+        galones: galones,
+        tipo: tipo,
+        odometro: odometro,
+        costoUnitario: costoUnitario,
+        total: total,
+        fecha: fecha,
+        creadaEn: creadaEn,
+        despachadorNombre: despachadorNombre,
+        pendienteEnvio: pendienteEnvio ?? this.pendienteEnvio,
+      );
 
   /// 'diesel' | 'gasolina' | 'glp'
   final String tipo;
@@ -378,6 +478,8 @@ class TanqueTipo {
     required this.alerta,
     this.consumoPromedioDiario,
     this.diasEstimados,
+    this.capacidad,
+    this.porcentaje,
   });
 
   /// 'diesel' | 'gasolina' | 'glp'
@@ -391,6 +493,13 @@ class TanqueTipo {
   /// null si no hubo consumo en los últimos 14 días.
   final double? diasEstimados;
 
+  /// Capacidad física del tanque en galones; null = sin fijar.
+  final double? capacidad;
+
+  /// Nivel REAL del tanque (saldo ÷ capacidad × 100, 1 decimal);
+  /// null si no hay capacidad configurada.
+  final double? porcentaje;
+
   String get etiqueta => TipoCombustible(tipo: tipo, precioSugerido: 0).etiqueta;
 
   factory TanqueTipo.desdeJson(Map<String, dynamic> j) => TanqueTipo(
@@ -400,6 +509,8 @@ class TanqueTipo {
         alerta: j['alerta'] == true,
         consumoPromedioDiario: (j['consumoPromedioDiario'] as num?)?.toDouble(),
         diasEstimados: (j['diasEstimados'] as num?)?.toDouble(),
+        capacidad: (j['capacidad'] as num?)?.toDouble(),
+        porcentaje: (j['porcentaje'] as num?)?.toDouble(),
       );
 }
 
@@ -416,6 +527,7 @@ class RecepcionCombustible {
     required this.creadaEn,
     this.proveedor,
     this.nota,
+    this.pendienteEnvio = false,
   });
 
   final String id;
@@ -427,6 +539,23 @@ class RecepcionCombustible {
   final double total;
   final String? proveedor;
   final String? nota;
+
+  /// Cola de salida (offline): guardada en el teléfono, sin enviar.
+  final bool pendienteEnvio;
+
+  RecepcionCombustible copiarCon({bool? pendienteEnvio}) =>
+      RecepcionCombustible(
+        id: id,
+        tipo: tipo,
+        galones: galones,
+        costoUnitario: costoUnitario,
+        total: total,
+        fecha: fecha,
+        creadaEn: creadaEn,
+        proveedor: proveedor,
+        nota: nota,
+        pendienteEnvio: pendienteEnvio ?? this.pendienteEnvio,
+      );
 
   /// yyyy-mm-dd
   final String fecha;
@@ -468,12 +597,33 @@ class SolicitudPieza {
     this.notaAdmin,
     this.cantidadRecibida,
     this.costoRecibido,
+    this.pendienteEnvio = false,
   });
 
   final String id;
 
   /// Pieza del catálogo si se eligió una; null = texto libre.
   final String? piezaId;
+
+  /// Cola de salida (offline): guardada en el teléfono, sin enviar.
+  final bool pendienteEnvio;
+
+  SolicitudPieza copiarCon({bool? pendienteEnvio}) => SolicitudPieza(
+        id: id,
+        nombrePieza: nombrePieza,
+        cantidad: cantidad,
+        urgencia: urgencia,
+        estado: estado,
+        fecha: fecha,
+        creadaEn: creadaEn,
+        piezaId: piezaId,
+        vehiculoId: vehiculoId,
+        nota: nota,
+        notaAdmin: notaAdmin,
+        cantidadRecibida: cantidadRecibida,
+        costoRecibido: costoRecibido,
+        pendienteEnvio: pendienteEnvio ?? this.pendienteEnvio,
+      );
   final String nombrePieza;
   final int cantidad;
   final String? vehiculoId;

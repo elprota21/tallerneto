@@ -4,6 +4,7 @@ import 'datos/repositorio.dart';
 import 'marca.dart';
 import 'pantallas/entrada.dart';
 import 'pantallas/principal.dart';
+import 'servicios/colores.dart';
 import 'servicios/tema.dart';
 
 /// App «TallerNeto» — la del personal del taller:
@@ -54,20 +55,9 @@ class _AppTallerNetoState extends State<AppTallerNeto> {
       builder: (_, oscuro, _) => MaterialApp(
         title: Marca.nombreApp,
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFFD97706), // ámbar de la marca
-            brightness: Brightness.light,
-          ),
-          useMaterial3: true,
-        ),
-        darkTheme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFFD97706),
-            brightness: Brightness.dark,
-          ),
-          useMaterial3: true,
-        ),
+        // Paleta de marca: la misma del panel (grafito + ámbar).
+        theme: ColoresMarca.temaClaro(),
+        darkTheme: ColoresMarca.temaOscuro(),
         themeMode: oscuro ? ThemeMode.dark : ThemeMode.light,
         home: AnimatedBuilder(
           animation: _repo,

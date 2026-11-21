@@ -111,6 +111,39 @@ class ChipEstadoTrabajo extends StatelessWidget {
   }
 }
 
+/// Sello «Pendiente de envío» de la cola de salida (offline): el
+/// registro está guardado en el teléfono y saldrá solo cuando
+/// haya conexión (o con «Sincronizar ahora» en el Perfil).
+class ChipPendienteEnvio extends StatelessWidget {
+  const ChipPendienteEnvio({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF59E0B).withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.cloud_off_outlined, size: 13, color: Color(0xFF92400E)),
+          SizedBox(width: 4),
+          Text(
+            'Pendiente de envío',
+            style: TextStyle(
+              color: Color(0xFF92400E),
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Saludo según la hora del día.
 String saludo() {
   final h = DateTime.now().hour;

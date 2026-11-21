@@ -58,8 +58,20 @@ class _PantallaEntradaState extends State<PantallaEntrada> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(Icons.build_circle_outlined, size: 72, color: cs.primary),
-                  const SizedBox(height: 12),
+                  // Logo oficial de TallerNeto (el #2 elegido por
+                  // Miguel: la guagua con la llave de parrilla).
+                  Center(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(22),
+                      child: Image.asset(
+                        'assets/logo.png',
+                        width: 104,
+                        height: 104,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   Text(
                     Marca.nombreApp,
                     textAlign: TextAlign.center,
@@ -68,7 +80,7 @@ class _PantallaEntradaState extends State<PantallaEntrada> {
                         ),
                   ),
                   Text(
-                    'App del mecánico y del lavado',
+                    'App del taller: mecánicos, lavado y combustible',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: cs.onSurfaceVariant),
                   ),
@@ -121,7 +133,7 @@ class _PantallaEntradaState extends State<PantallaEntrada> {
                   const SizedBox(height: 24),
                   Text(
                     'Demostración (PIN 1234):\n'
-                    'MEC-01 · mecánico a destajo\n'
+                    'MEC-01 · mecánico a destajo (también almacén)\n'
                     'MEC-02 · mecánico con sueldo\n'
                     'LAV-01 · coordinador de lavado\n'
                     'COM-01 · despachador de combustible',

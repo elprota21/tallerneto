@@ -1,1 +1,6 @@
-{"apkUrl": "https://github.com/elprota21/tallerneto/releases/download/v1.2.0/TallerNeto-Mecanico.apk", "notas": "Novedades: rol adicional opcional. Si tienes dos funciones con pantalla en el taller, al entrar eliges con cuál trabajar y puedes cambiarla en tu Perfil («Cambiar de función»). MEC-01 ahora es mecánico y también almacén. Sigue en modo demostración completo, sin servidor.", "versionCode": 4, "versionName": "1.2.0"}
+{
+  "versionCode": 5,
+  "versionName": "1.3.0",
+  "apkUrl": "https://github.com/elprota21/tallerneto/releases/download/v1.3.0/TallerNeto-Mecanico.apk",
+  "notas": "Novedades 1.3.0: logo nuevo de TallerNeto y los colores del panel (grafito y ámbar). Ahora la app trabaja SIN INTERNET: todo lo que registres queda guardado en tu teléfono con el sello «Pendiente de envío» y se envía solo cuando vuelve la conexión (contador en la barra superior y en tu Perfil, con botón «Sincronizar ahora»). Tutorial de bienvenida la primera vez, repetible desde el Perfil. Y si tu empresa apagó los precios en la app, los despachos y recepciones ya no muestran costos: solo guagua, galones y odómetro."
+}

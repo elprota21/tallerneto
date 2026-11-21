@@ -24,12 +24,12 @@ class PantallaCombustible extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
     if (!datos.empresa.combustibleActivo) {
+      // Módulo extra no contratado: mensaje amable y comercial.
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
           child: Text(
-            'El módulo de combustible no está activo en tu empresa. '
-            'Es una función adicional: la activa administración con TallerNeto.',
+            mensajeModuloExtra,
             textAlign: TextAlign.center,
           ),
         ),
@@ -50,7 +50,11 @@ class PantallaCombustible extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Hoy: ${datos.totalGalonesHoy} galones · ${dinero(datos.totalCostoHoy)}',
+                      // Sin precios en la app, ni el total del día
+                      // enseña dinero: solo los galones.
+                      datos.empresa.preciosEnApp
+                          ? 'Hoy: ${datos.totalGalonesHoy} galones · ${dinero(datos.totalCostoHoy)}'
+                          : 'Hoy: ${datos.totalGalonesHoy} galones despachados',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                             color: cs.onPrimaryContainer,
@@ -111,12 +115,22 @@ class PantallaCombustible extends StatelessWidget {
                   leading: const Icon(Icons.local_gas_station_outlined),
                   title: Text(
                       '${d.vehiculoCodigo} · ${d.galones} gal de ${d.tipoEtiqueta}'),
-                  subtitle: Text(
-                      'Odómetro ${d.odometro.toStringAsFixed(0)} km · '
-                      '${horaCorta(d.creadaEn)}'
-                      '${d.despachadorNombre != null ? ' · ${d.despachadorNombre}' : ''}'),
-                  trailing: Text(dinero(d.total),
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Odómetro ${d.odometro.toStringAsFixed(0)} km · '
+                          '${horaCorta(d.creadaEn)}'
+                          '${d.despachadorNombre != null ? ' · ${d.despachadorNombre}' : ''}'),
+                      if (d.pendienteEnvio) ...[
+                        const SizedBox(height: 4),
+                        const ChipPendienteEnvio(),
+                      ],
+                    ],
+                  ),
+                  trailing: datos.empresa.preciosEnApp
+                      ? Text(dinero(d.total),
+                          style: const TextStyle(fontWeight: FontWeight.bold))
+                      : null,
                 ),
               ),
             ),
@@ -144,8 +158,9 @@ class PantallaCombustible extends StatelessWidget {
   }
 }
 
-/// Tarjeta del tanque de un tipo: «Diésel: quedan X gal». En
-/// alerta (saldo ≤ umbral) se pinta de error y dice «Poco
+/// Tarjeta del tanque de un tipo: «Diésel: quedan X gal» y, si
+/// la empresa fijó la capacidad, «de N gal · P%» (el nivel real).
+/// En alerta (saldo ≤ umbral) se pinta de error y dice «Poco
 /// combustible», para que el despachador avise a administración
 /// y pidan la recarga a tiempo.
 class _TarjetaTanque extends StatelessWidget {
@@ -181,6 +196,15 @@ class _TarjetaTanque extends StatelessWidget {
                       color: t.alerta ? cs.onErrorContainer : null,
                     ),
                   ),
+                  if (t.capacidad != null)
+                    Text(
+                      'de ${galones(t.capacidad!)} gal'
+                      '${t.porcentaje != null ? ' · ${t.porcentaje!.toStringAsFixed(1)}%' : ''}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: t.alerta ? cs.onErrorContainer : cs.onSurfaceVariant,
+                      ),
+                    ),
                   Text(
                     t.alerta
                         ? 'Poco combustible'

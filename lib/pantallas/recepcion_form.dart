@@ -63,11 +63,15 @@ class _PantallaRecepcionFormState extends State<PantallaRecepcionForm> {
 
   Future<void> _guardar() async {
     if (_tipo == null) return;
+    // Precios opcionales: apagados, la app no pide costos y
+    // manda el precio vigente de administración.
+    final conPrecios =
+        widget.repo.datosCombustible?.empresa.preciosEnApp ?? true;
     if (_gal <= 0) {
       _avisar('Escribe la cantidad de galones recibidos (mayor que cero).');
       return;
     }
-    if (_costoGal < 0) {
+    if (conPrecios && _costoGal < 0) {
       _avisar('El costo por galón no puede ser negativo.');
       return;
     }
@@ -79,9 +83,8 @@ class _PantallaRecepcionFormState extends State<PantallaRecepcionForm> {
         title: const Text('¿Confirmar recepción?'),
         content: Text(
           'Combustible: ${_tipo!.etiqueta}\n'
-          'Entran: $_gal galones\n'
-          'Costo por galón: ${dinero(_costoGal)}\n'
-          'TOTAL: ${dinero(_total)}'
+          'Entran: $_gal galones'
+          '${conPrecios ? '\nCosto por galón: ${dinero(_costoGal)}\nTOTAL: ${dinero(_total)}' : '\nEl costo lo calcula administración.'}'
           '${_proveedor.text.trim().isEmpty ? '' : '\nProveedor: ${_proveedor.text.trim()}'}'
           '${saldoActual != null ? '\nEl tanque quedará con ${galones(saldoActual + _gal)} galones de ${_tipo!.etiqueta}.' : ''}',
         ),
@@ -103,7 +106,7 @@ class _PantallaRecepcionFormState extends State<PantallaRecepcionForm> {
       await widget.repo.registrarRecepcion(
         tipo: _tipo!.tipo,
         galones: _gal,
-        costoUnitario: _costoGal,
+        costoUnitario: conPrecios ? _costoGal : _tipo!.precioSugerido,
         proveedor: _proveedor.text,
         nota: _nota.text,
       );
@@ -126,6 +129,7 @@ class _PantallaRecepcionFormState extends State<PantallaRecepcionForm> {
     if (datos == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+    final conPrecios = datos.empresa.preciosEnApp;
     return Scaffold(
       appBar: AppBar(title: const Text('Recibir combustible')),
       body: ListView(
@@ -164,19 +168,22 @@ class _PantallaRecepcionFormState extends State<PantallaRecepcionForm> {
                   onChanged: (_) => setState(() {}),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: _costo,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Costo por galón (RD\$)',
-                    border: OutlineInputBorder(),
+              // Sin precios en la app, el campo de costo ni sale.
+              if (conPrecios) ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _costo,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Costo por galón (RD\$)',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (_) => setState(() {}),
                   ),
-                  onChanged: (_) => setState(() {}),
                 ),
-              ),
+              ],
             ],
           ),
           const SizedBox(height: 12),
@@ -197,22 +204,42 @@ class _PantallaRecepcionFormState extends State<PantallaRecepcionForm> {
             ),
           ),
           const SizedBox(height: 20),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('TOTAL',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  Text(dinero(_total),
-                      style: const TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.bold)),
-                ],
+          if (conPrecios)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('TOTAL',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text(dinero(_total),
+                        style: const TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            )
+          else
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Tu empresa no muestra precios en la app: el costo '
+                        'de esta carga lo calcula administración con el '
+                        'precio vigente.',
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
           const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: _guardando || _tipo == null ? null : _guardar,

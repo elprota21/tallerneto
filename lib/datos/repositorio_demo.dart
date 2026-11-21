@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
 import '../modelos.dart';
+import 'cola.dart';
 import 'repositorio.dart';
 
 /// ================================================================
@@ -16,7 +18,9 @@ import 'repositorio.dart';
 /// datos-tanque-demo.sql + datos-solicitudes-demo.sql):
 ///   · Empresa «Transportes Demo», módulos de lavado y
 ///     combustible ACTIVADOS.
-///   · MEC-01 (destajo) y MEC-02 (sueldo RD$35,000/mes), PIN 1234.
+///   · MEC-01 (destajo, y con ROL ADICIONAL almacén — como
+///     datos-roles-demo.sql del servidor) y MEC-02 (sueldo
+///     RD$35,000/mes), PIN 1234.
 ///   · LAV-01 «Coordinador de Lavado», COM-01 «Despachador de
 ///     Combustible», PIN 1234.
 ///   · Catálogo de 6 trabajos, 6 vehículos, 17 piezas (P-17 sin
@@ -58,6 +62,9 @@ class RepositorioDemo extends RepositorioTaller {
           nombre: 'Juan Carlos Pérez',
           codigo: 'MEC-01',
           rol: 'mecanico',
+          // Rol adicional ALMACÉN (sin pantalla en la app: entra
+          // directo como mecánico; el almacén lo ejerce en el panel).
+          rolAdicional: 'almacen',
           modoPago: 'destajo'),
       pin: '1234',
     ),
@@ -156,11 +163,179 @@ class RepositorioDemo extends RepositorioTaller {
     'glp': 30,
   };
 
+  /// Capacidades de los tanques de la demo (como
+  /// datos-tanque-demo.sql): con ellas el porcentaje es el nivel
+  /// real — diésel 391/1000 = 39.1% · gasolina 40/200 = 20% ·
+  /// GLP 80/150 = 53.3%.
+  static const _capacidadesTanque = <String, double>{
+    'diesel': 1000,
+    'gasolina': 200,
+    'glp': 150,
+  };
+
   static const _tiposCombustible = <TipoCombustible>[
     TipoCombustible(tipo: 'diesel', precioSugerido: 250),
     TipoCombustible(tipo: 'gasolina', precioSugerido: 290),
     TipoCombustible(tipo: 'glp', precioSugerido: 145),
   ];
+
+  // ---------- configuración ampliada (espejo de config-ampliada.sql) --
+  // Qué tipos de combustible trabaja la empresa y el precio
+  // vigente de cada uno, más si la app muestra precios. En la
+  // demo arranca todo activo con los precios de la semilla; en
+  // producción lo manda administración desde el panel y el
+  // servidor rechaza lo que no cuadre con esta configuración.
+  final Map<String, bool> _tiposActivos = {
+    'diesel': true,
+    'gasolina': true,
+    'glp': true,
+  };
+  final Map<String, double> _preciosVigentes = {
+    'diesel': 250,
+    'gasolina': 290,
+    'glp': 145,
+  };
+  // En la demo vale «encendido»; en producción lo trae el
+  // snapshot del servidor (pr_datos_combustible).
+  final bool _preciosEnApp = true;
+
+  /// La empresa tal y como la ven las pantallas: la semilla más
+  /// la configuración ampliada vigente.
+  Empresa get _empresaVista => Empresa(
+        id: _empresa.id,
+        nombre: _empresa.nombre,
+        lavadoActivo: _empresa.lavadoActivo,
+        combustibleActivo: _empresa.combustibleActivo,
+        preciosEnApp: _preciosEnApp,
+        tutorialActivo: true,
+      );
+
+  /// Tipos que la empresa trabaja, con el precio vigente como
+  /// «precio sugerido» (es el que se aplica cuando la app no
+  /// maneja precios).
+  List<TipoCombustible> get _tiposVisibles => _tiposCombustible
+      .where((t) => _tiposActivos[t.tipo] ?? true)
+      .map((t) => TipoCombustible(
+            tipo: t.tipo,
+            precioSugerido: _preciosVigentes[t.tipo] ?? t.precioSugerido,
+          ))
+      .toList();
+
+  bool _tipoActivo(String tipo) => _tiposActivos[tipo] ?? true;
+
+  // ---------- cola de salida (offline) ----------
+  final ColaSalida _cola = ColaSalida();
+  bool _colaLista = false;
+  bool _sinConexion = false;
+  Timer? _timerSync;
+
+  @override
+  int get pendientesEnvio => _cola.cantidad;
+
+  @override
+  List<String> get descripcionesPendientes =>
+      _cola.items.map((e) => e.descripcion).toList();
+
+  @override
+  bool get esDemo => true;
+
+  @override
+  bool get sinConexionSimulada => _sinConexion;
+
+  @override
+  Future<void> fijarSinConexionSimulada(bool valor) async {
+    _sinConexion = valor;
+    notifyListeners();
+    if (!valor) {
+      // Al «volver» el internet, todo lo guardado sale solo.
+      await sincronizarAhora();
+    }
+  }
+
+  /// Prepara la cola al entrar: la carga del teléfono y arranca
+  /// el reintento automático (cada 20 s) por si quedó algo.
+  Future<void> _prepararCola() async {
+    if (!_colaLista) {
+      _colaLista = true;
+      await _cola.cargar();
+    }
+    _timerSync ??= Timer.periodic(
+      const Duration(seconds: 20),
+      (_) => _intentarSync(),
+    );
+    _intentarSync();
+  }
+
+  void _intentarSync() {
+    sincronizarAhora().then((_) {}, onError: (_) {});
+  }
+
+  /// Guarda un registro en la cola con su sello de pendiente y
+  /// programa el envío automático a los pocos segundos.
+  Future<void> _encolar(
+      String tipo, String registroId, String descripcion) async {
+    await _cola.agregar(ElementoCola(
+      tipo: tipo,
+      registroId: registroId,
+      descripcion: descripcion,
+      creadaEn: DateTime.now().toIso8601String(),
+    ));
+    notifyListeners();
+    Timer(const Duration(seconds: 4), _intentarSync);
+  }
+
+  @override
+  Future<int> sincronizarAhora() async {
+    if (_cola.vacia || _sesion == null) return 0;
+    if (_sinConexion) {
+      throw const ErrorServidor(
+          'Sin conexión: los registros quedan guardados en el teléfono '
+          'y saldrán solos cuando vuelva el internet.');
+    }
+    final enviados = _cola.cantidad;
+    final idsTrabajos = _cola.items
+        .where((e) => e.tipo == 'trabajo')
+        .map((e) => e.registroId)
+        .toSet();
+    final idsSolicitudes = _cola.items
+        .where((e) => e.tipo == 'solicitud')
+        .map((e) => e.registroId)
+        .toSet();
+    final idsDespachos = _cola.items
+        .where((e) => e.tipo == 'despacho')
+        .map((e) => e.registroId)
+        .toSet();
+    final idsRecepciones = _cola.items
+        .where((e) => e.tipo == 'recepcion')
+        .map((e) => e.registroId)
+        .toSet();
+    for (var i = 0; i < _trabajos.length; i++) {
+      if (idsTrabajos.contains(_trabajos[i].id)) {
+        _trabajos[i] = _trabajos[i].copiarCon(pendienteEnvio: false);
+      }
+    }
+    for (var i = 0; i < _solicitudes.length; i++) {
+      if (idsSolicitudes.contains(_solicitudes[i].id)) {
+        _solicitudes[i] = _solicitudes[i].copiarCon(pendienteEnvio: false);
+      }
+    }
+    for (var i = 0; i < _despachos.length; i++) {
+      if (idsDespachos.contains(_despachos[i].id)) {
+        _despachos[i] = _despachos[i].copiarCon(pendienteEnvio: false);
+      }
+    }
+    for (var i = 0; i < _recepciones.length; i++) {
+      if (idsRecepciones.contains(_recepciones[i].id)) {
+        _recepciones[i] = _recepciones[i].copiarCon(pendienteEnvio: false);
+      }
+    }
+    // Los lavados no llevan bandera propia: su «pendiente» se
+    // deriva de estar en la cola, así que basta con vaciarla.
+    await _cola.vaciar();
+    _prepararDatos();
+    notifyListeners();
+    return enviados;
+  }
 
   static String _iso(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -360,6 +535,21 @@ class RepositorioDemo extends RepositorioTaller {
     } catch (_) {}
   }
 
+  /// Al fijar el rol activo (al entrar o al cambiarlo en el
+  /// Perfil), se preparan los datos de ESE rol.
+  @override
+  void alFijarRolActivo() => _prepararDatos();
+
+  /// Rol con el que se entra: si el usuario tiene UN solo rol con
+  /// pantalla, ese; si tiene DOS, null (la principal muestra el
+  /// selector para que elija). El adicional almacén no cuenta:
+  /// no tiene pantalla en la app.
+  String? _rolInicial(Usuario u) =>
+      u.rolesApp.length == 1 ? u.rolesApp.first : null;
+
+  /// El rol que manda en pantalla ahora mismo.
+  String get _vista => rolActivo ?? _sesion?.rol ?? '';
+
   @override
   Future<Usuario> iniciarSesion(String codigo, String pin) async {
     _sembrar();
@@ -371,7 +561,8 @@ class RepositorioDemo extends RepositorioTaller {
         }
         _sesion = entrada.usuario;
         await _guardarSesion(entrada.usuario.id);
-        _prepararDatos();
+        fijarRolActivo(_rolInicial(entrada.usuario));
+        await _prepararCola();
         notifyListeners();
         return entrada.usuario;
       }
@@ -390,7 +581,8 @@ class RepositorioDemo extends RepositorioTaller {
       for (final entrada in _usuarios) {
         if (entrada.usuario.id == id) {
           _sesion = entrada.usuario;
-          _prepararDatos();
+          fijarRolActivo(_rolInicial(entrada.usuario));
+          await _prepararCola();
           notifyListeners();
           return true;
         }
@@ -407,6 +599,7 @@ class RepositorioDemo extends RepositorioTaller {
     _datosMecanico = null;
     _datosLavado = null;
     _datosCombustible = null;
+    fijarRolActivo(null);
     await _borrarSesionGuardada();
     notifyListeners();
   }
@@ -414,9 +607,12 @@ class RepositorioDemo extends RepositorioTaller {
   void _prepararDatos() {
     final u = _sesion;
     if (u == null) return;
-    if (u.esLavado) {
+    // Los datos se preparan para el rol EN PANTALLA (el activo),
+    // no necesariamente para el principal: quien es mecánico y
+    // también lavado ve los datos del rol que eligió.
+    if (_vista == 'lavado') {
       _datosLavado = _construirDatosLavado(u);
-    } else if (u.esCombustible) {
+    } else if (_vista == 'combustible') {
       _datosCombustible = _construirDatosCombustible(u);
     } else {
       _datosMecanico = _construirDatosMecanico(u);
@@ -439,7 +635,7 @@ class RepositorioDemo extends RepositorioTaller {
           ..sort((a, b) => b.creadaEn.compareTo(a.creadaEn));
     return DatosMecanico(
       usuario: u,
-      empresa: _empresa,
+      empresa: _empresaVista,
       tiposTrabajo: _tipos,
       vehiculos: _vehiculos,
       piezas: _piezas,
@@ -453,7 +649,7 @@ class RepositorioDemo extends RepositorioTaller {
   @override
   Future<void> recargarMecanico() async {
     final u = _sesion;
-    if (u == null || u.esLavado) return;
+    if (u == null || _vista != 'mecanico') return;
     _datosMecanico = _construirDatosMecanico(u);
     notifyListeners();
   }
@@ -466,7 +662,7 @@ class RepositorioDemo extends RepositorioTaller {
     String? descripcion,
   }) async {
     final u = _sesion;
-    if (u == null || u.rol != 'mecanico') {
+    if (u == null || _vista != 'mecanico') {
       throw const ErrorServidor('Solo un mecánico registra trabajos');
     }
     final tipos = _tipos.where((t) => t.id == tipoTrabajoId);
@@ -489,10 +685,15 @@ class RepositorioDemo extends RepositorioTaller {
           ? null
           : descripcion.trim(),
       piezas: List.of(piezas),
+      // Nace en la cola de salida: guardado en el teléfono con
+      // sello «Pendiente de envío» hasta que sincronice.
+      pendienteEnvio: true,
     );
     _duenos[nuevo.id] = u.id;
     _trabajos.insert(0, nuevo);
     _datosMecanico = _construirDatosMecanico(u);
+    await _encolar('trabajo', nuevo.id,
+        'Trabajo: ${tipo.nombre} · ${_vehiculos.firstWhere((v) => v.id == vehiculoId).codigo}');
     notifyListeners();
     return nuevo;
   }
@@ -507,7 +708,7 @@ class RepositorioDemo extends RepositorioTaller {
     String? nota,
   }) async {
     final u = _sesion;
-    if (u == null || u.rol != 'mecanico') {
+    if (u == null || _vista != 'mecanico') {
       throw const ErrorServidor(
           'Solo un mecánico puede pedir piezas a administración');
     }
@@ -545,10 +746,13 @@ class RepositorioDemo extends RepositorioTaller {
       estado: 'pendiente',
       fecha: _hoy(),
       creadaEn: DateTime.now().toIso8601String(),
+      pendienteEnvio: true,
     );
     _duenosSol[nueva.id] = u.id;
     _solicitudes.insert(0, nueva);
     _datosMecanico = _construirDatosMecanico(u);
+    await _encolar(
+        'solicitud', nueva.id, 'Solicitud: $nombreFinal ×$cantidad');
     notifyListeners();
     return nueva;
   }
@@ -558,7 +762,7 @@ class RepositorioDemo extends RepositorioTaller {
   DatosLavado _construirDatosLavado(Usuario u) {
     return DatosLavado(
       usuario: u,
-      empresa: _empresa,
+      empresa: _empresaVista,
       fecha: _hoy(),
       vehiculos: _vehiculos
           .map(
@@ -568,6 +772,9 @@ class RepositorioDemo extends RepositorioTaller {
               marcadaEn: _lavadasHoy[v.id],
               marcadaPorNombre:
                   _lavadasHoy.containsKey(v.id) ? 'Coordinador de Lavado' : null,
+              // El marcado de esta guagua está en la cola de
+              // salida (aún no enviado).
+              pendienteEnvio: _cola.contiene('lavado', v.id),
             ),
           )
           .toList(),
@@ -577,7 +784,7 @@ class RepositorioDemo extends RepositorioTaller {
   @override
   Future<void> recargarLavado() async {
     final u = _sesion;
-    if (u == null || !u.esLavado) return;
+    if (u == null || _vista != 'lavado') return;
     _datosLavado = _construirDatosLavado(u);
     notifyListeners();
   }
@@ -585,11 +792,12 @@ class RepositorioDemo extends RepositorioTaller {
   @override
   Future<void> marcarLavado(String vehiculoId) async {
     final u = _sesion;
-    if (u == null || !u.esLavado) {
+    if (u == null || _vista != 'lavado') {
       throw const ErrorServidor('Solo el coordinador de lavado marca lavados');
     }
     if (!_empresa.lavadoActivo) {
-      throw const ErrorServidor('El módulo de lavado no está activo en esta empresa');
+      // Mensaje amable y comercial (es un módulo extra).
+      throw const ErrorServidor(mensajeModuloExtra);
     }
     if (_lavadasHoy.containsKey(vehiculoId)) {
       // Anti-duplicado: una guagua, una vez por día (como el servidor).
@@ -598,13 +806,15 @@ class RepositorioDemo extends RepositorioTaller {
     }
     _lavadasHoy[vehiculoId] = DateTime.now().toIso8601String();
     _datosLavado = _construirDatosLavado(u);
+    final v = _vehiculos.firstWhere((x) => x.id == vehiculoId);
+    await _encolar('lavado', vehiculoId, 'Lavado marcado: ${v.codigo}');
     notifyListeners();
   }
 
   @override
   Future<void> desmarcarLavado(String vehiculoId) async {
     final u = _sesion;
-    if (u == null || !u.esLavado) {
+    if (u == null || _vista != 'lavado') {
       throw const ErrorServidor('Solo el coordinador de lavado desmarca lavados');
     }
     if (!_lavadasHoy.containsKey(vehiculoId)) {
@@ -615,6 +825,8 @@ class RepositorioDemo extends RepositorioTaller {
     // en la demo basta con quitar el marcado del día.
     _lavadasHoy.remove(vehiculoId);
     _datosLavado = _construirDatosLavado(u);
+    final v = _vehiculos.firstWhere((x) => x.id == vehiculoId);
+    await _encolar('lavado', vehiculoId, 'Lavado desmarcado: ${v.codigo}');
     notifyListeners();
   }
 
@@ -646,9 +858,10 @@ class RepositorioDemo extends RepositorioTaller {
   List<TanqueTipo> _construirTanque() {
     final hoy = _hoy();
     final desde14 = _iso(DateTime.now().subtract(const Duration(days: 13)));
-    return _tiposCombustible.map((t) {
+    return _tiposVisibles.map((t) {
       final saldo = _saldoTanque(t.tipo);
       final umbral = _umbralesTanque[t.tipo] ?? 0;
+      final capacidad = _capacidadesTanque[t.tipo];
       final consumo14 = _despachos
           .where((d) =>
               d.tipo == t.tipo &&
@@ -664,6 +877,10 @@ class RepositorioDemo extends RepositorioTaller {
         consumoPromedioDiario: (promedio * 100).round() / 100,
         diasEstimados:
             promedio > 0 ? ((saldo / promedio) * 10).round() / 10 : null,
+        capacidad: capacidad,
+        porcentaje: capacidad != null && capacidad > 0
+            ? ((saldo / capacidad) * 1000).round() / 10
+            : null,
       );
     }).toList();
   }
@@ -686,9 +903,9 @@ class RepositorioDemo extends RepositorioTaller {
       ..sort((a, b) => b.creadaEn.compareTo(a.creadaEn));
     return DatosCombustible(
       usuario: u,
-      empresa: _empresa,
+      empresa: _empresaVista,
       fecha: hoy,
-      tipos: _tiposCombustible,
+      tipos: _tiposVisibles,
       vehiculos: _vehiculos
           .map((v) => VehiculoCombustible(
                 vehiculo: v,
@@ -705,7 +922,7 @@ class RepositorioDemo extends RepositorioTaller {
   @override
   Future<void> recargarCombustible() async {
     final u = _sesion;
-    if (u == null || !u.esCombustible) return;
+    if (u == null || _vista != 'combustible') return;
     _datosCombustible = _construirDatosCombustible(u);
     notifyListeners();
   }
@@ -719,12 +936,12 @@ class RepositorioDemo extends RepositorioTaller {
     required double costoUnitario,
   }) async {
     final u = _sesion;
-    if (u == null || !u.esCombustible) {
+    if (u == null || _vista != 'combustible') {
       throw const ErrorServidor('Solo el despachador registra despachos');
     }
     if (!_empresa.combustibleActivo) {
-      throw const ErrorServidor(
-          'El módulo de combustible no está activo en esta empresa');
+      // Mensaje amable y comercial (es un módulo extra).
+      throw const ErrorServidor(mensajeModuloExtra);
     }
     final vehiculos = _vehiculos.where((v) => v.id == vehiculoId);
     if (vehiculos.isEmpty) {
@@ -737,6 +954,18 @@ class RepositorioDemo extends RepositorioTaller {
     if (!_tiposCombustible.any((t) => t.tipo == tipo)) {
       throw ErrorServidor('Tipo de combustible no válido: $tipo');
     }
+    if (!_tipoActivo(tipo)) {
+      // Espejo del servidor (config-ampliada): un tipo apagado
+      // por la empresa no se puede despachar.
+      throw ErrorServidor(
+          'El combustible ${TipoCombustible(tipo: tipo, precioSugerido: 0).etiqueta} no está activo en esta empresa: actívalo en los ajustes del panel o elige otro tipo');
+    }
+    // Precios opcionales: si la empresa apagó los precios en la
+    // app, manda el PRECIO VIGENTE de administración y se ignora
+    // el costo que venga del formulario.
+    final costo = _preciosEnApp
+        ? costoUnitario
+        : (_preciosVigentes[tipo] ?? costoUnitario);
     // Regla de integridad (espejo del servidor): el odómetro no baja.
     final ultimo = _ultimoOdometro(vehiculoId);
     if (ultimo != null && odometro < ultimo) {
@@ -762,14 +991,17 @@ class RepositorioDemo extends RepositorioTaller {
       galones: galones,
       tipo: tipo,
       odometro: odometro,
-      costoUnitario: costoUnitario,
-      total: (galones * costoUnitario * 100).round() / 100,
+      costoUnitario: costo,
+      total: (galones * costo * 100).round() / 100,
       fecha: _hoy(),
       creadaEn: DateTime.now().toIso8601String(),
       despachadorNombre: u.nombre,
+      pendienteEnvio: true,
     );
     _despachos.insert(0, nuevo);
     _datosCombustible = _construirDatosCombustible(u);
+    await _encolar('despacho', nuevo.id,
+        'Despacho: ${v.codigo} · $galones gal de ${nuevo.tipoEtiqueta}');
     notifyListeners();
     return nuevo;
   }
@@ -783,40 +1015,68 @@ class RepositorioDemo extends RepositorioTaller {
     String? nota,
   }) async {
     final u = _sesion;
-    if (u == null || !u.esCombustible) {
+    if (u == null || _vista != 'combustible') {
       throw const ErrorServidor(
           'Solo el encargado de combustible registra recepciones');
     }
     if (!_empresa.combustibleActivo) {
-      throw const ErrorServidor(
-          'El módulo de combustible no está activo en esta empresa');
+      // Mensaje amable y comercial (es un módulo extra).
+      throw const ErrorServidor(mensajeModuloExtra);
     }
     if (!_tiposCombustible.any((t) => t.tipo == tipo)) {
       throw ErrorServidor('Tipo de combustible no válido: $tipo');
+    }
+    if (!_tipoActivo(tipo)) {
+      throw ErrorServidor(
+          'El combustible ${TipoCombustible(tipo: tipo, precioSugerido: 0).etiqueta} no está activo en esta empresa: actívalo en los ajustes del panel o elige otro tipo');
     }
     if (galones <= 0) {
       throw const ErrorServidor(
           'La cantidad de galones recibidos debe ser mayor que cero');
     }
-    if (costoUnitario < 0) {
+    if (_preciosEnApp && costoUnitario < 0) {
       throw const ErrorServidor(
           'El costo por galón no puede ser negativo');
+    }
+    // Precios opcionales: apagados en la app → precio vigente.
+    final costo = _preciosEnApp
+        ? costoUnitario
+        : (_preciosVigentes[tipo] ?? costoUnitario);
+    // Regla física (espejo del servidor): a un tanque no le cabe
+    // más de su capacidad configurada. Mismo mensaje del servidor.
+    final capacidad = _capacidadesTanque[tipo];
+    if (capacidad != null) {
+      final saldo = _saldoTanque(tipo);
+      if (saldo + galones > capacidad) {
+        const etiquetas = {
+          'diesel': 'diésel',
+          'gasolina': 'gasolina',
+          'glp': 'GLP'
+        };
+        throw ErrorServidor(
+            'El tanque de ${etiquetas[tipo] ?? tipo} es de '
+            '${_fmtGal(capacidad)} gal y tiene ${_fmtGal(saldo)}: '
+            'no caben ${_fmtGal(galones)} más');
+      }
     }
     _contador += 1;
     final nueva = RecepcionCombustible(
       id: 'rec-nueva-$_contador',
       tipo: tipo,
       galones: galones,
-      costoUnitario: costoUnitario,
-      total: (galones * costoUnitario * 100).round() / 100,
+      costoUnitario: costo,
+      total: (galones * costo * 100).round() / 100,
       proveedor:
           (proveedor == null || proveedor.trim().isEmpty) ? null : proveedor.trim(),
       nota: (nota == null || nota.trim().isEmpty) ? null : nota.trim(),
       fecha: _hoy(),
       creadaEn: DateTime.now().toIso8601String(),
+      pendienteEnvio: true,
     );
     _recepciones.insert(0, nueva);
     _datosCombustible = _construirDatosCombustible(u);
+    await _encolar('recepcion', nueva.id,
+        'Recepción: $galones gal de ${nueva.tipoEtiqueta}');
     notifyListeners();
     return nueva;
   }

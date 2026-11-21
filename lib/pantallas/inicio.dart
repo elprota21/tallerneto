@@ -107,7 +107,16 @@ class PantallaInicio extends StatelessWidget {
             (t) => Card(
               child: ListTile(
                 title: Text(t.tipoNombre),
-                subtitle: Text(etiquetaVehiculo(t.vehiculoId)),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(etiquetaVehiculo(t.vehiculoId)),
+                    if (t.pendienteEnvio) ...[
+                      const SizedBox(height: 4),
+                      const ChipPendienteEnvio(),
+                    ],
+                  ],
+                ),
                 trailing: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -174,12 +183,21 @@ class PantallaInicio extends StatelessWidget {
               child: ListTile(
                 leading: const Icon(Icons.inventory_2_outlined),
                 title: Text('${s.nombrePieza} × ${s.cantidad}'),
-                subtitle: Text(
-                  '${s.vehiculoId != null ? '${etiquetaVehiculo(s.vehiculoId!)} · ' : ''}'
-                  '${fechaCorta(s.fecha)}'
-                  '${s.esUrgente ? ' · URGENTE' : ''}'
-                  '${s.estado == 'rechazada' && s.notaAdmin != null ? '\nMotivo: ${s.notaAdmin}' : ''}'
-                  '${s.estado == 'recibida' && s.cantidadRecibida != null ? '\nEntraron ${s.cantidadRecibida} al inventario' : ''}',
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${s.vehiculoId != null ? '${etiquetaVehiculo(s.vehiculoId!)} · ' : ''}'
+                      '${fechaCorta(s.fecha)}'
+                      '${s.esUrgente ? ' · URGENTE' : ''}'
+                      '${s.estado == 'rechazada' && s.notaAdmin != null ? '\nMotivo: ${s.notaAdmin}' : ''}'
+                      '${s.estado == 'recibida' && s.cantidadRecibida != null ? '\nEntraron ${s.cantidadRecibida} al inventario' : ''}',
+                    ),
+                    if (s.pendienteEnvio) ...[
+                      const SizedBox(height: 4),
+                      const ChipPendienteEnvio(),
+                    ],
+                  ],
                 ),
                 trailing: ChipEstadoSolicitud(estado: s.estado),
               ),

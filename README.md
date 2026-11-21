@@ -7,10 +7,19 @@ Una sola app, funciones según el ROL de quien entra:
 | Mecánico a destajo | `MEC-01` | Inicio con «Llevo ganado» (suma de trabajos validados del mes) y «En revisión», Registrar trabajo por pasos, Historial, Perfil, y **solicitudes de piezas**: botón «Pedir pieza» + el estado de las suyas (pendiente / en pedido / recibida / rechazada con el motivo); al registrar un trabajo, atajo «Pedir esta pieza» en las piezas sin stock |
 | Mecánico con sueldo | `MEC-02` | Igual, pero el Inicio muestra «Tu sueldo: RD$35,000» y sus trabajos como productividad |
 | Coordinador de lavado | `LAV-01` | Interfaz de lavado: guaguas de hoy con marcado/desmarcado y resumen «Lavadas hoy: X de Y» (solo si la empresa tiene el módulo activo) |
-| Despachador de combustible | `COM-01` | Interfaz de combustible: **tarjeta del tanque por tipo** («Diésel: quedan X gal», alerta «Poco combustible» y días estimados), botón **«Recibir combustible»** (tipo + galones + costo por galón + proveedor opcional), despachos de hoy, total de galones del día y registrar despacho (vehículo + galones + tipo + odómetro que no puede bajar + costo por galón; el despacho descuenta del tanque y se rechaza si el saldo no alcanza) (solo si la empresa tiene el módulo activo) |
+| Despachador de combustible | `COM-01` | Interfaz de combustible: **tarjeta del tanque por tipo** («Diésel: quedan X gal», con «de N gal · P%» si la empresa fijó la capacidad, alerta «Poco combustible» y días estimados), botón **«Recibir combustible»** (tipo + galones + costo por galón + proveedor opcional; se rechaza si se pasa de la capacidad del tanque), despachos de hoy, total de galones del día y registrar despacho (vehículo + galones + tipo + odómetro que no puede bajar + costo por galón; el despacho descuenta del tanque y se rechaza si el saldo no alcanza) (solo si la empresa tiene el módulo activo) |
 
 PIN demo de todos: **1234**. Tema M3 con **modo noche/día** en el
 Perfil (preferencia guardada en el teléfono).
+
+**Rol adicional (desde la 1.2.0):** el login trae el rol principal
+y el adicional (`rolAdicional`). MEC-01 es mecánico **+ almacén**:
+como el almacén no tiene pantalla en la app, entra directo como
+mecánico (su segundo sombrero se ejerce en el panel, donde valida
+trabajos ajenos y recibe solicitudes). Si una persona tuviera dos
+roles CON pantalla (p. ej. mecánico + lavado), al entrar la app le
+pregunta con cuál trabajar y el Perfil trae la tarjeta «Cambiar de
+función» para cambiar cuando quiera.
 
 ## Modo demo (sin servidor)
 
@@ -33,7 +42,7 @@ proyectos gratuitos; ver el informe del módulo). El punto de
 conexión está documentado en `lib/datos/conexion.dart`: cuando el
 proyecto exista se rellenan URL + llave anon, se aplica el SQL del
 servidor (esquema → trabajos → lavado → combustible → tanque →
-solicitudes) y se crea `RepositorioReal` contra las RPC
+solicitudes → roles → config-ampliada) y se crea `RepositorioReal` contra las RPC
 `pr_iniciar_sesion`, `pr_datos_mecanico`, `pr_registrar_trabajo`,
 `pr_solicitar_pieza`, `pr_datos_lavado`, `pr_marcar_lavado`,
 `pr_desmarcar_lavado`, `pr_datos_combustible`,
@@ -42,6 +51,32 @@ pantallas.
 
 ## Versiones
 
+- **1.3.0 (2026-11-21)**: la tanda de marca y autonomía —
+  **logo oficial** (la guagua con la llave, elegido por Miguel) como
+  icono y en la pantalla de entrada, y la **paleta del panel nuevo**
+  (grafito/ámbar) en modo día y noche; **cola de salida offline**:
+  trabajos, lavados, despachos, recepciones y solicitudes nacen con
+  el sello «Pendiente de envío», quedan guardados en el teléfono,
+  con contador en la barra superior y en el Perfil, reintento
+  automático y «Sincronizar ahora» (en demo, interruptor «Simular
+  sin conexión» en el Perfil para probarlo); **tutorial de
+  bienvenida** por rol la primera vez (con «Omitir»), repetible
+  desde el Perfil → «Ver tutorial»; la app respeta la
+  **configuración de combustible** de la empresa (solo tipos
+  activos en selectores, tanque y formularios; con los **precios
+  apagados** en el panel, los formularios no muestran costos y
+  manda el precio vigente de administración); mensaje comercial
+  amable cuando un módulo extra no está contratado.
+- **1.2.0 (2026-11-20)**: rol adicional opcional — el login trae
+  los dos roles del usuario; con dos roles CON pantalla, selector
+  de función al entrar y «Cambiar de función» en el Perfil; con el
+  adicional almacén (sin pantalla), entrada directa. En la demo,
+  MEC-01 queda mecánico + almacén, igual que en el panel.
+- **1.1.1 (2026-11-20)**: capacidad del tanque — las tarjetas del
+  despachador muestran «de N gal · P%» (el nivel real: saldo ÷
+  capacidad) cuando la empresa la tiene fijada, y el demo rechaza
+  las recepciones que se pasan de la capacidad, igual que el
+  servidor.
 - **1.1.0 (2026-11-20)**: inventario del tanque de combustible
   (tarjetas por tipo con alerta y días estimados, «Recibir
   combustible», despachos que descuentan del saldo) y solicitudes

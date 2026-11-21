@@ -53,6 +53,10 @@ class _PantallaDespachoFormState extends State<PantallaDespachoForm> {
   Future<void> _guardar() async {
     final datos = widget.repo.datosCombustible;
     if (datos == null || _vehiculo == null || _tipo == null) return;
+    // Precios opcionales (config de la empresa): apagados, el
+    // despachador no ve ni escribe costos — manda el precio
+    // vigente que administración fijó en el panel.
+    final conPrecios = datos.empresa.preciosEnApp;
     final odo = double.tryParse(_odometro.text.replaceAll(',', '.'));
     if (_gal <= 0) {
       _avisar('Escribe la cantidad de galones (mayor que cero).');
@@ -62,7 +66,7 @@ class _PantallaDespachoFormState extends State<PantallaDespachoForm> {
       _avisar('Escribe el odómetro del vehículo al despachar.');
       return;
     }
-    if (_costoGal < 0) {
+    if (conPrecios && _costoGal < 0) {
       _avisar('El costo por galón no puede ser negativo.');
       return;
     }
@@ -75,9 +79,8 @@ class _PantallaDespachoFormState extends State<PantallaDespachoForm> {
           'Vehículo: ${_vehiculo!.vehiculo.etiqueta}\n'
           'Combustible: ${_tipo!.etiqueta}\n'
           'Cantidad: $_gal galones\n'
-          'Odómetro: ${odo.toStringAsFixed(0)} km\n'
-          'Costo por galón: ${dinero(_costoGal)}\n'
-          'TOTAL: ${dinero(_total)}',
+          'Odómetro: ${odo.toStringAsFixed(0)} km'
+          '${conPrecios ? '\nCosto por galón: ${dinero(_costoGal)}\nTOTAL: ${dinero(_total)}' : '\nEl costo lo calcula administración.'}',
         ),
         actions: [
           TextButton(
@@ -99,7 +102,9 @@ class _PantallaDespachoFormState extends State<PantallaDespachoForm> {
         galones: _gal,
         tipo: _tipo!.tipo,
         odometro: odo,
-        costoUnitario: _costoGal,
+        // Sin precios en la app se pasa el vigente (el servidor
+        // y la demo aplican el de administración de todos modos).
+        costoUnitario: conPrecios ? _costoGal : _tipo!.precioSugerido,
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -121,6 +126,7 @@ class _PantallaDespachoFormState extends State<PantallaDespachoForm> {
     if (datos == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+    final conPrecios = datos.empresa.preciosEnApp;
     return Scaffold(
       appBar: AppBar(title: const Text('Registrar despacho')),
       body: ListView(
@@ -155,7 +161,9 @@ class _PantallaDespachoFormState extends State<PantallaDespachoForm> {
             children: [
               for (final t in datos.tipos)
                 ChoiceChip(
-                  label: Text('${t.etiqueta} · ${dinero(t.precioSugerido)}/gal'),
+                  label: Text(conPrecios
+                      ? '${t.etiqueta} · ${dinero(t.precioSugerido)}/gal'
+                      : t.etiqueta),
                   selected: _tipo?.tipo == t.tipo,
                   onSelected: (_) => setState(() {
                     _tipo = t;
@@ -179,19 +187,22 @@ class _PantallaDespachoFormState extends State<PantallaDespachoForm> {
                   onChanged: (_) => setState(() {}),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: _costo,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Costo por galón (RD\$)',
-                    border: OutlineInputBorder(),
+              // Sin precios en la app, el campo de costo ni sale.
+              if (conPrecios) ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _costo,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Costo por galón (RD\$)',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (_) => setState(() {}),
                   ),
-                  onChanged: (_) => setState(() {}),
                 ),
-              ),
+              ],
             ],
           ),
           const SizedBox(height: 12),
@@ -208,22 +219,43 @@ class _PantallaDespachoFormState extends State<PantallaDespachoForm> {
             ),
           ),
           const SizedBox(height: 20),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('TOTAL',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  Text(dinero(_total),
-                      style: const TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.bold)),
-                ],
+          if (conPrecios)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('TOTAL',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text(dinero(_total),
+                        style: const TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            )
+          else
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Tu empresa no muestra precios en la app: el costo '
+                        'de este despacho lo calcula administración con el '
+                        'precio vigente. Tú solo anotas la guagua, los '
+                        'galones y el odómetro.',
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
           const SizedBox(height: 16),
           FilledButton.icon(
             onPressed:

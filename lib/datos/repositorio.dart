@@ -28,6 +28,33 @@ class ErrorServidor implements Exception {
 abstract class RepositorioTaller extends ChangeNotifier {
   Usuario? get sesion;
 
+  // ---------- rol activo (rol principal + rol adicional) ----------
+
+  String? _rolActivo;
+
+  /// Con cuál de mis roles CON pantalla estoy trabajando ahora
+  /// ('mecanico' | 'lavado' | 'combustible'). Null cuando todavía
+  /// no se eligió: solo pasa si el usuario tiene DOS roles con
+  /// pantalla — la principal muestra entonces el selector. Si el
+  /// rol adicional es almacén (sin pantalla), al entrar se fija
+  /// solo el rol de app y nunca hace falta elegir.
+  String? get rolActivo => _rolActivo;
+
+  /// El rol que manda en pantalla: el activo, o el principal.
+  String? get rolEnPantalla => _rolActivo ?? sesion?.rol;
+
+  /// Fija el rol activo (al entrar y al cambiarlo desde el Perfil)
+  /// y reconstruye los datos de ese rol en la implementación.
+  void fijarRolActivo(String? rol) {
+    _rolActivo = rol;
+    alFijarRolActivo();
+    notifyListeners();
+  }
+
+  /// Gancho de las implementaciones: preparar los datos del rol
+  /// activo recién fijado. La base no hace nada.
+  void alFijarRolActivo() {}
+
   /// Entrada con código + PIN. Si entra, la sesión queda guardada en
   /// el teléfono. Si no, lanza [ErrorServidor] con el mensaje.
   Future<Usuario> iniciarSesion(String codigo, String pin);
@@ -92,6 +119,30 @@ abstract class RepositorioTaller extends ChangeNotifier {
     String? proveedor,
     String? nota,
   });
+
+  // ---------- cola de salida (offline) ----------
+
+  /// Registros guardados en el teléfono pendientes de envío.
+  /// La base no tiene cola: 0.
+  int get pendientesEnvio => 0;
+
+  /// Descripciones cortas de lo que está por enviar (Perfil).
+  List<String> get descripcionesPendientes => const [];
+
+  /// ¿Esta implementación es la demo local? (La demo añade en el
+  /// Perfil el interruptor para simular «sin conexión».)
+  bool get esDemo => false;
+
+  /// Simulación de «sin conexión» (solo demo): encendida, nada
+  /// se envía y todo queda en la cola hasta apagarla o pulsar
+  /// «Sincronizar ahora» con conexión.
+  bool get sinConexionSimulada => false;
+  Future<void> fijarSinConexionSimulada(bool valor) async {}
+
+  /// Intenta enviar todo lo pendiente. Devuelve cuántos registros
+  /// salieron. Si no hay conexión, lanza [ErrorServidor] y la
+  /// cola queda intacta.
+  Future<int> sincronizarAhora() async => 0;
 }
 
 /// Repositorio según la conexión: sin proyecto Supabase configurado,

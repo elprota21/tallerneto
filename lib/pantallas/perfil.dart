@@ -2,17 +2,24 @@ import 'package:material_ui/material_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../datos/repositorio.dart';
+import '../modelos.dart';
 import '../servicios/actualizacion.dart';
 import '../servicios/tema.dart';
 import 'comun.dart';
+import 'tutorial.dart';
 
-/// Perfil: mis datos, mi modo de pago, MODO NOCHE/DÍA, buscar
-/// actualización y cerrar sesión. Sirve igual para el mecánico y
-/// para el coordinador de lavado.
+/// Perfil: mis datos (con mis DOS roles si tengo adicional), mi
+/// modo de pago, CAMBIAR DE FUNCIÓN si tengo dos roles con
+/// pantalla, MODO NOCHE/DÍA, buscar actualización y cerrar sesión.
+/// Sirve igual para el mecánico, el lavado y el combustible.
 class PantallaPerfil extends StatelessWidget {
-  const PantallaPerfil({super.key, required this.repo});
+  const PantallaPerfil({super.key, required this.repo, this.alCambiarRol});
 
   final RepositorioTaller repo;
+
+  /// La principal lo pasa para volver a la primera pestaña tras
+  /// cambiar de función.
+  final VoidCallback? alCambiarRol;
 
   @override
   Widget build(BuildContext context) {
@@ -22,12 +29,11 @@ class PantallaPerfil extends StatelessWidget {
         repo.datosLavado?.empresa.nombre ??
         repo.datosCombustible?.empresa.nombre ??
         '';
-    final rolTexto = switch (u.rol) {
-      'mecanico' => 'Mecánico',
-      'lavado' => 'Coordinador de lavado',
-      'combustible' => 'Despachador de combustible',
-      _ => u.rol,
-    };
+    // Mis roles: el principal y, si lo hay, el adicional.
+    final rolTexto = u.rolAdicional == null
+        ? Usuario.etiquetaDe(u.rol)
+        : '${Usuario.etiquetaDe(u.rol)} + ${Usuario.etiquetaDe(u.rolAdicional!)}';
+    final vista = repo.rolEnPantalla ?? u.rol;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -54,7 +60,44 @@ class PantallaPerfil extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 24),
-        if (u.rol == 'mecanico')
+        // Cambiar de función: solo si tengo DOS roles con pantalla.
+        // (El adicional almacén no tiene pantalla en la app: ese
+        // sombrero se ejerce en el panel, aquí no hay nada que
+        // cambiar.)
+        if (u.tieneDosRolesApp)
+          Card(
+            child: Column(
+              children: [
+                const ListTile(
+                  leading: Icon(Icons.swap_horiz_outlined),
+                  title: Text('Cambiar de función'),
+                  subtitle: Text(
+                      'Estás trabajando con un rol; toca el otro para cambiar.'),
+                ),
+                for (final r in u.rolesApp)
+                  ListTile(
+                    leading: Icon(r == vista
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked),
+                    title: Text(Usuario.etiquetaDe(r)),
+                    subtitle: Text(r == u.rol
+                        ? 'Rol principal'
+                        : 'Rol adicional'),
+                    trailing: r == vista
+                        ? const Chip(label: Text('Ahora'))
+                        : null,
+                    onTap: r == vista
+                        ? null
+                        : () {
+                            repo.fijarRolActivo(r);
+                            alCambiarRol?.call();
+                          },
+                  ),
+              ],
+            ),
+          ),
+        if (u.tieneDosRolesApp) const SizedBox(height: 8),
+        if (u.rolesApp.contains('mecanico'))
           Card(
             child: ListTile(
               leading: const Icon(Icons.payments_outlined),
@@ -79,6 +122,101 @@ class PantallaPerfil extends StatelessWidget {
                   'Pantalla oscura para trabajar con poca luz.'),
               value: oscuro,
               onChanged: (v) => TemaApp.fijar(v),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Sincronización (cola de salida offline): lo guardado en
+        // el teléfono que aún no ha salido, con su botón.
+        Card(
+          child: Column(
+            children: [
+              ListTile(
+                leading: Icon(repo.pendientesEnvio > 0
+                    ? Icons.cloud_off_outlined
+                    : Icons.cloud_done_outlined),
+                title: Text(repo.pendientesEnvio > 0
+                    ? '${repo.pendientesEnvio} registro${repo.pendientesEnvio == 1 ? '' : 's'} por enviar'
+                    : 'Todo enviado'),
+                subtitle: Text(repo.pendientesEnvio > 0
+                    ? 'Están guardados en tu teléfono y salen solos '
+                        'cuando haya conexión. Esto lo fuerza ahora.'
+                    : 'Nada pendiente: el teléfono y el sistema van al día.'),
+                trailing: repo.pendientesEnvio > 0
+                    ? FilledButton.tonal(
+                        onPressed: () async {
+                          try {
+                            final n = await repo.sincronizarAhora();
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(n > 0
+                                      ? 'Se enviaron $n registros. ✅'
+                                      : 'Nada pendiente de envío.'),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(e.toString())),
+                              );
+                            }
+                          }
+                        },
+                        child: const Text('Sincronizar ahora'),
+                      )
+                    : null,
+              ),
+              if (repo.pendientesEnvio > 0)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      repo.descripcionesPendientes.take(4).join('\n'),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+              // Solo en la demo: probar el comportamiento sin
+              // conexión sin tener que apagar el internet.
+              if (repo.esDemo)
+                SwitchListTile(
+                  secondary: const Icon(Icons.wifi_off_outlined),
+                  title: const Text('Simular sin conexión (demo)'),
+                  subtitle: const Text(
+                      'Lo que registres queda en el teléfono hasta apagar esto.'),
+                  value: repo.sinConexionSimulada,
+                  onChanged: (v) async {
+                    await repo.fijarSinConexionSimulada(v);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(v
+                              ? 'Sin conexión (simulado): todo queda guardado en el teléfono.'
+                              : 'Conexión de vuelta: lo pendiente se envió.'),
+                        ),
+                      );
+                    }
+                  },
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.school_outlined),
+            title: const Text('Ver tutorial'),
+            subtitle: const Text(
+                'El recorrido de bienvenida: qué haces tú en la app, paso a paso.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => PantallaTutorial(rol: vista)),
             ),
           ),
         ),
