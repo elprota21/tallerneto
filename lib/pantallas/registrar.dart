@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../datos/repositorio.dart';
 import '../modelos.dart';
 import 'comun.dart';
+import 'pedir_pieza.dart';
 
 /// Registrar un trabajo terminado, por pasos (como la confirmación
 /// de RutaNeto):
@@ -222,34 +223,69 @@ class _PantallaRegistrarState extends State<PantallaRegistrar> {
             ...datos.piezas.map((p) {
               final cantidad = _piezas[p.id] ?? 0;
               return Card(
-                child: ListTile(
-                  title: Text(p.nombre),
-                  subtitle: Text('${p.codigo} · quedan ${p.stock}'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.remove_circle_outline),
-                        onPressed: cantidad == 0
-                            ? null
-                            : () => setState(() {
-                                  if (cantidad <= 1) {
-                                    _piezas.remove(p.id);
-                                  } else {
-                                    _piezas[p.id] = cantidad - 1;
-                                  }
-                                }),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ListTile(
+                      title: Text(p.nombre),
+                      subtitle: Text(p.stock <= 0
+                          ? '${p.codigo} · SIN STOCK'
+                          : '${p.codigo} · quedan ${p.stock}'),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle_outline),
+                            onPressed: cantidad == 0
+                                ? null
+                                : () => setState(() {
+                                      if (cantidad <= 1) {
+                                        _piezas.remove(p.id);
+                                      } else {
+                                        _piezas[p.id] = cantidad - 1;
+                                      }
+                                    }),
+                          ),
+                          Text('$cantidad',
+                              style: const TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold)),
+                          IconButton(
+                            icon: const Icon(Icons.add_circle_outline),
+                            onPressed: () =>
+                                setState(() => _piezas[p.id] = cantidad + 1),
+                          ),
+                        ],
                       ),
-                      Text('$cantidad',
-                          style: const TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.bold)),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle_outline),
-                        onPressed: () =>
-                            setState(() => _piezas[p.id] = cantidad + 1),
+                    ),
+                    // Atajo: si la pieza no tiene stock, se puede
+                    // pedir a administración sin salir del registro.
+                    if (p.stock <= 0)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: TextButton.icon(
+                          onPressed: () async {
+                            final ok = await Navigator.of(context).push<bool>(
+                              MaterialPageRoute(
+                                builder: (_) => PantallaPedirPieza(
+                                  repo: widget.repo,
+                                  piezaInicial: p,
+                                  vehiculoIdInicial: _vehiculo?.id,
+                                ),
+                              ),
+                            );
+                            if (ok == true && mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text(
+                                        'Solicitud enviada: administración la verá en el panel.')),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.add_shopping_cart_outlined),
+                          label: const Text('Pedir esta pieza'),
+                        ),
                       ),
-                    ],
-                  ),
+                  ],
                 ),
               );
             }),
