@@ -4,10 +4,10 @@ Una sola app, funciones según el ROL de quien entra:
 
 | Rol | Código demo | Qué ve |
 |---|---|---|
-| Mecánico a destajo | `MEC-01` | Inicio con «Llevo ganado» (suma de trabajos validados del mes) y «En revisión», Registrar trabajo por pasos, Historial, Perfil |
+| Mecánico a destajo | `MEC-01` | Inicio con «Llevo ganado» (suma de trabajos validados del mes) y «En revisión», Registrar trabajo por pasos, Historial, Perfil, y **solicitudes de piezas**: botón «Pedir pieza» + el estado de las suyas (pendiente / en pedido / recibida / rechazada con el motivo); al registrar un trabajo, atajo «Pedir esta pieza» en las piezas sin stock |
 | Mecánico con sueldo | `MEC-02` | Igual, pero el Inicio muestra «Tu sueldo: RD$35,000» y sus trabajos como productividad |
 | Coordinador de lavado | `LAV-01` | Interfaz de lavado: guaguas de hoy con marcado/desmarcado y resumen «Lavadas hoy: X de Y» (solo si la empresa tiene el módulo activo) |
-| Despachador de combustible | `COM-01` | Interfaz de combustible: despachos de hoy, total de galones del día y registrar despacho (vehículo + galones + tipo + odómetro que no puede bajar + costo por galón) (solo si la empresa tiene el módulo activo) |
+| Despachador de combustible | `COM-01` | Interfaz de combustible: **tarjeta del tanque por tipo** («Diésel: quedan X gal», alerta «Poco combustible» y días estimados), botón **«Recibir combustible»** (tipo + galones + costo por galón + proveedor opcional), despachos de hoy, total de galones del día y registrar despacho (vehículo + galones + tipo + odómetro que no puede bajar + costo por galón; el despacho descuenta del tanque y se rechaza si el saldo no alcanza) (solo si la empresa tiene el módulo activo) |
 
 PIN demo de todos: **1234**. Tema M3 con **modo noche/día** en el
 Perfil (preferencia guardada en el teléfono).
@@ -16,10 +16,15 @@ Perfil (preferencia guardada en el teléfono).
 
 La app funciona COMPLETA sin backend: los datos semilla viven en
 `lib/datos/repositorio_demo.dart` y son equivalentes a los del panel
-demo y a la semilla SQL («Transportes Demo», lavado activado,
-catálogo de 6 trabajos, trabajos en estados mixtos, 3 guaguas ya
-lavadas hoy). Registrar trabajos y marcar lavados funciona en el
-momento, en memoria + sesión guardada en el teléfono.
+demo y a la semilla SQL («Transportes Demo», lavado y combustible
+activados, catálogo de 6 trabajos, trabajos en estados mixtos, 3
+guaguas ya lavadas hoy, 14 despachos, tanque con recepciones —
+diésel 391 gal cómodo, gasolina 40 gal BAJO el umbral: alerta
+visible— y 2 solicitudes de piezas). Registrar trabajos, marcar
+lavados, despachar, recibir combustible y pedir piezas funciona en
+el momento, en memoria + sesión guardada en el teléfono, con las
+mismas reglas del servidor (incluido el rechazo de despacho sin
+saldo en el tanque, con el mismo mensaje).
 
 ## Conexión a Supabase (preparada, sin activar)
 
@@ -27,10 +32,23 @@ El proyecto Supabase «taller-neto» aún no existe (límite de
 proyectos gratuitos; ver el informe del módulo). El punto de
 conexión está documentado en `lib/datos/conexion.dart`: cuando el
 proyecto exista se rellenan URL + llave anon, se aplica el SQL del
-servidor (esquema → trabajos → lavado) y se crea `RepositorioReal`
-contra las RPC `pr_iniciar_sesion`, `pr_datos_mecanico`,
-`pr_registrar_trabajo`, `pr_datos_lavado`, `pr_marcar_lavado` y
-`pr_desmarcar_lavado`, sin tocar las pantallas.
+servidor (esquema → trabajos → lavado → combustible → tanque →
+solicitudes) y se crea `RepositorioReal` contra las RPC
+`pr_iniciar_sesion`, `pr_datos_mecanico`, `pr_registrar_trabajo`,
+`pr_solicitar_pieza`, `pr_datos_lavado`, `pr_marcar_lavado`,
+`pr_desmarcar_lavado`, `pr_datos_combustible`,
+`pr_registrar_despacho` y `pr_registrar_recepcion`, sin tocar las
+pantallas.
+
+## Versiones
+
+- **1.1.0 (2026-11-20)**: inventario del tanque de combustible
+  (tarjetas por tipo con alerta y días estimados, «Recibir
+  combustible», despachos que descuentan del saldo) y solicitudes
+  de piezas del mecánico (botón «Pedir pieza», atajo en piezas sin
+  stock, estado de sus solicitudes en el Inicio).
+- **1.0.0 (2026-11-20)**: primera versión — trabajos con pago
+  destajo/sueldo, módulo de lavado y módulo de combustible.
 
 ## Actualización automática (desde la 1.0.0)
 
