@@ -50,6 +50,18 @@ abstract class RepositorioTaller extends ChangeNotifier {
     String? descripcion,
   });
 
+  /// Pide una pieza a administración (nace pendiente). O del
+  /// catálogo ([piezaId]) o de texto libre ([nombre]). Solo el
+  /// rol mecánico, siempre a su propio nombre.
+  Future<SolicitudPieza> solicitarPieza({
+    String? piezaId,
+    String? nombre,
+    required int cantidad,
+    String? vehiculoId,
+    String urgencia = 'normal',
+    String? nota,
+  });
+
   // ---------- lavado ----------
   DatosLavado? get datosLavado;
   Future<void> recargarLavado();
@@ -61,13 +73,24 @@ abstract class RepositorioTaller extends ChangeNotifier {
   Future<void> recargarCombustible();
 
   /// Registra un despacho. El odómetro no puede ser menor que el
-  /// último registrado para ese vehículo (regla del servidor).
+  /// último registrado para ese vehículo, y el tanque debe tener
+  /// saldo suficiente del tipo (reglas del servidor).
   Future<DespachoCombustible> registrarDespacho({
     required String vehiculoId,
     required double galones,
     required String tipo,
     required double odometro,
     required double costoUnitario,
+  });
+
+  /// Registra una recepción: la carga que entró al tanque
+  /// (suma al saldo del tipo). Solo el rol combustible (y admin).
+  Future<RecepcionCombustible> registrarRecepcion({
+    required String tipo,
+    required double galones,
+    required double costoUnitario,
+    String? proveedor,
+    String? nota,
   });
 }
 
