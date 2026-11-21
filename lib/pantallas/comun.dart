@@ -42,6 +42,47 @@ String horaCorta(String? iso) {
   return '$h:${d.minute.toString().padLeft(2, '0')} $ampm';
 }
 
+/// Galones sin ceros de más: 391 → «391», 40.5 → «40.5».
+String galones(double v) {
+  if (v == v.roundToDouble()) return v.toInt().toString();
+  var s = v.toStringAsFixed(2);
+  while (s.endsWith('0')) {
+    s = s.substring(0, s.length - 1);
+  }
+  if (s.endsWith('.')) s = s.substring(0, s.length - 1);
+  return s;
+}
+
+/// Etiqueta de estado de una solicitud de pieza, con color.
+class ChipEstadoSolicitud extends StatelessWidget {
+  const ChipEstadoSolicitud({super.key, required this.estado});
+
+  /// 'pendiente' | 'pedida' | 'recibida' | 'rechazada'
+  final String estado;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final (Color fondo, Color texto, String etiqueta) = switch (estado) {
+      'recibida' => (Colors.green.withValues(alpha: 0.15), Colors.green.shade800, 'Recibida'),
+      'rechazada' => (cs.errorContainer, cs.onErrorContainer, 'Rechazada'),
+      'pedida' => (Colors.blue.withValues(alpha: 0.15), Colors.blue.shade800, 'En pedido'),
+      _ => (Colors.amber.withValues(alpha: 0.18), Colors.amber.shade900, 'Pendiente'),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: fondo,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        etiqueta,
+        style: TextStyle(color: texto, fontWeight: FontWeight.w600, fontSize: 12),
+      ),
+    );
+  }
+}
+
 /// Etiqueta de estado de un trabajo, con color.
 class ChipEstadoTrabajo extends StatelessWidget {
   const ChipEstadoTrabajo({super.key, required this.estado});
