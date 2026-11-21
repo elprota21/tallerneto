@@ -225,6 +225,7 @@ class DatosMecanico {
     required this.trabajos,
     required this.totalValidadoMes,
     required this.totalPendienteMes,
+    this.solicitudes = const [],
   });
 
   final Usuario usuario;
@@ -233,6 +234,9 @@ class DatosMecanico {
   final List<Vehiculo> vehiculos;
   final List<Pieza> piezas;
   final List<Trabajo> trabajos;
+
+  /// Mis solicitudes de piezas, con su estado (solo las propias).
+  final List<SolicitudPieza> solicitudes;
 
   /// Suma de precios de trabajos VALIDADOS del mes (lo que lleva
   /// ganado un mecánico de destajo).
@@ -258,6 +262,9 @@ class DatosMecanico {
             .toList(),
         totalValidadoMes: (j['totalValidadoMes'] as num?)?.toDouble() ?? 0,
         totalPendienteMes: (j['totalPendienteMes'] as num?)?.toDouble() ?? 0,
+        solicitudes: ((j['solicitudes'] as List?) ?? const [])
+            .map((s) => SolicitudPieza.desdeJson(s as Map<String, dynamic>))
+            .toList(),
       );
 }
 
@@ -360,6 +367,154 @@ class DespachoCombustible {
       );
 }
 
+/// Estado del tanque de la empresa para un tipo de combustible
+/// (servidor/tanque.sql): saldo = recepciones − despachos, umbral
+/// de «poco combustible», alerta y días estimados de alcance.
+class TanqueTipo {
+  const TanqueTipo({
+    required this.tipo,
+    required this.saldo,
+    required this.umbral,
+    required this.alerta,
+    this.consumoPromedioDiario,
+    this.diasEstimados,
+  });
+
+  /// 'diesel' | 'gasolina' | 'glp'
+  final String tipo;
+  final double saldo;
+  final double umbral;
+  final bool alerta;
+  final double? consumoPromedioDiario;
+
+  /// Días que alcanza el saldo al ritmo de consumo reciente;
+  /// null si no hubo consumo en los últimos 14 días.
+  final double? diasEstimados;
+
+  String get etiqueta => TipoCombustible(tipo: tipo, precioSugerido: 0).etiqueta;
+
+  factory TanqueTipo.desdeJson(Map<String, dynamic> j) => TanqueTipo(
+        tipo: j['tipo'].toString(),
+        saldo: (j['saldo'] as num?)?.toDouble() ?? 0,
+        umbral: (j['umbral'] as num?)?.toDouble() ?? 0,
+        alerta: j['alerta'] == true,
+        consumoPromedioDiario: (j['consumoPromedioDiario'] as num?)?.toDouble(),
+        diasEstimados: (j['diasEstimados'] as num?)?.toDouble(),
+      );
+}
+
+/// Una recepción de combustible: la carga que entró al tanque
+/// (la registra el despachador; suma al saldo del tipo).
+class RecepcionCombustible {
+  const RecepcionCombustible({
+    required this.id,
+    required this.tipo,
+    required this.galones,
+    required this.costoUnitario,
+    required this.total,
+    required this.fecha,
+    required this.creadaEn,
+    this.proveedor,
+    this.nota,
+  });
+
+  final String id;
+
+  /// 'diesel' | 'gasolina' | 'glp'
+  final String tipo;
+  final double galones;
+  final double costoUnitario;
+  final double total;
+  final String? proveedor;
+  final String? nota;
+
+  /// yyyy-mm-dd
+  final String fecha;
+
+  /// ISO con hora.
+  final String creadaEn;
+
+  String get tipoEtiqueta => TipoCombustible(tipo: tipo, precioSugerido: 0).etiqueta;
+
+  factory RecepcionCombustible.desdeJson(Map<String, dynamic> j) =>
+      RecepcionCombustible(
+        id: j['id'].toString(),
+        tipo: j['tipo'].toString(),
+        galones: (j['galones'] as num?)?.toDouble() ?? 0,
+        costoUnitario: (j['costoUnitario'] as num?)?.toDouble() ?? 0,
+        total: (j['total'] as num?)?.toDouble() ?? 0,
+        proveedor: j['proveedor']?.toString(),
+        nota: j['nota']?.toString(),
+        fecha: j['fecha']?.toString() ?? '',
+        creadaEn: j['creadaEn']?.toString() ?? '',
+      );
+}
+
+/// Solicitud de pieza de un mecánico (servidor/solicitudes.sql).
+/// Flujo: 'pendiente' → 'pedida' → 'recibida' / 'rechazada'.
+/// Al recibirse, el stock entra solo al inventario.
+class SolicitudPieza {
+  const SolicitudPieza({
+    required this.id,
+    required this.nombrePieza,
+    required this.cantidad,
+    required this.urgencia,
+    required this.estado,
+    required this.fecha,
+    required this.creadaEn,
+    this.piezaId,
+    this.vehiculoId,
+    this.nota,
+    this.notaAdmin,
+    this.cantidadRecibida,
+    this.costoRecibido,
+  });
+
+  final String id;
+
+  /// Pieza del catálogo si se eligió una; null = texto libre.
+  final String? piezaId;
+  final String nombrePieza;
+  final int cantidad;
+  final String? vehiculoId;
+
+  /// 'normal' | 'urgente'
+  final String urgencia;
+  final String? nota;
+
+  /// 'pendiente' | 'pedida' | 'recibida' | 'rechazada'
+  final String estado;
+
+  /// Motivo del rechazo (lo escribe administración; el mecánico lo ve).
+  final String? notaAdmin;
+  final int? cantidadRecibida;
+  final double? costoRecibido;
+
+  /// yyyy-mm-dd
+  final String fecha;
+
+  /// ISO con hora.
+  final String creadaEn;
+
+  bool get esUrgente => urgencia == 'urgente';
+
+  factory SolicitudPieza.desdeJson(Map<String, dynamic> j) => SolicitudPieza(
+        id: j['id'].toString(),
+        piezaId: j['piezaId']?.toString(),
+        nombrePieza: j['nombrePieza'].toString(),
+        cantidad: (j['cantidad'] as num?)?.toInt() ?? 1,
+        vehiculoId: j['vehiculoId']?.toString(),
+        urgencia: j['urgencia']?.toString() ?? 'normal',
+        nota: j['nota']?.toString(),
+        estado: j['estado'].toString(),
+        notaAdmin: j['notaAdmin']?.toString(),
+        cantidadRecibida: (j['cantidadRecibida'] as num?)?.toInt(),
+        costoRecibido: (j['costoRecibido'] as num?)?.toDouble(),
+        fecha: j['fecha']?.toString() ?? '',
+        creadaEn: j['creadaEn']?.toString() ?? '',
+      );
+}
+
 /// Un vehículo en la vista del despachador, con su último odómetro.
 class VehiculoCombustible {
   const VehiculoCombustible({required this.vehiculo, this.ultimoOdometro});
@@ -389,6 +544,7 @@ class DatosCombustible {
     required this.despachosHoy,
     required this.totalGalonesHoy,
     required this.totalCostoHoy,
+    this.tanque = const [],
   });
 
   final Usuario usuario;
@@ -402,12 +558,18 @@ class DatosCombustible {
   final double totalGalonesHoy;
   final double totalCostoHoy;
 
+  /// Inventario del tanque por tipo (saldo, umbral, alerta, días).
+  final List<TanqueTipo> tanque;
+
   factory DatosCombustible.desdeJson(Map<String, dynamic> j) => DatosCombustible(
         usuario: Usuario.desdeJson(j['usuario'] as Map<String, dynamic>),
         empresa: Empresa.desdeJson(j['empresa'] as Map<String, dynamic>),
         fecha: j['fecha'].toString(),
         tipos: ((j['tipos'] as List?) ?? const [])
             .map((t) => TipoCombustible.desdeJson(t as Map<String, dynamic>))
+            .toList(),
+        tanque: ((j['tanque'] as List?) ?? const [])
+            .map((t) => TanqueTipo.desdeJson(t as Map<String, dynamic>))
             .toList(),
         vehiculos: ((j['vehiculos'] as List?) ?? const [])
             .map((v) => VehiculoCombustible.desdeJson(v as Map<String, dynamic>))
