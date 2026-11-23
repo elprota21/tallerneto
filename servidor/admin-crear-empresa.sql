@@ -163,6 +163,20 @@ begin
     null; -- el módulo de inventario por unidad aún no está aplicado
   end;
 
+  -- Catálogo base de tipos de trabajo (6, los de la demo, editables
+  -- por el admin en el panel): sin esto la empresa nace con el
+  -- catálogo vacío y el mecánico no puede registrar ningún trabajo
+  -- (hallazgo de Miguel, 2026-11-23). Precios base en RD$.
+  insert into tipos_trabajo (empresa_id, codigo, nombre, precio_mano_obra)
+  values
+    (e.id, 'CAT-01', 'Cambio de aceite', 500),
+    (e.id, 'CAT-02', 'Rotación de gomas', 400),
+    (e.id, 'CAT-03', 'Cambio de pastillas de freno', 800),
+    (e.id, 'CAT-04', 'Afinamiento (bujías y filtros)', 600),
+    (e.id, 'CAT-05', 'Cambio de batería', 300),
+    (e.id, 'CAT-06', 'Alineación y balanceo', 900)
+  on conflict (empresa_id, codigo) do nothing;
+
   perform pr_registrar_accion(e.id, q.id, 'empresa_creada',
     format('Creó la empresa «%s» (licencia activa hasta el %s, máx. %s vehículos) y su administrador %s (%s)',
            e.nombre, to_char(lic.vence, 'DD/MM/YYYY'), lic.max_vehiculos,
