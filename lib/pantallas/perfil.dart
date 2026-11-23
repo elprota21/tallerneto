@@ -305,31 +305,43 @@ class PantallaPerfil extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
+        // Versión instalada + buscar actualización, juntas:
+        // la versión se lee del sistema en tiempo de ejecución
+        // (PackageInfo), nunca es un texto fijo (regla de
+        // Miguel, 2026-11-23: toda app muestra su versión).
         Card(
-          child: ListTile(
-            leading: const Icon(Icons.system_update_outlined),
-            title: const Text('Buscar actualización'),
-            subtitle: const Text('La app se actualiza sola; esto lo fuerza.'),
-            onTap: () => Actualizador.comprobar(
-              context,
-              forzar: true,
-              alEstado: (msg) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(SnackBar(content: Text(msg)));
-                }
-              },
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        FutureBuilder<PackageInfo>(
-          future: PackageInfo.fromPlatform(),
-          builder: (_, snap) => Text(
-            snap.hasData ? 'Versión ${snap.data!.version}' : '',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant),
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: const Text('Versión instalada'),
+                subtitle: FutureBuilder<PackageInfo>(
+                  future: PackageInfo.fromPlatform(),
+                  builder: (_, snap) => Text(
+                    snap.hasData
+                        ? '${snap.data!.version} (${snap.data!.buildNumber})'
+                        : '…',
+                  ),
+                ),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.system_update_outlined),
+                title: const Text('Buscar actualización'),
+                subtitle:
+                    const Text('La app se actualiza sola; esto lo fuerza.'),
+                onTap: () => Actualizador.comprobar(
+                  context,
+                  forzar: true,
+                  alEstado: (msg) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(SnackBar(content: Text(msg)));
+                    }
+                  },
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 24),

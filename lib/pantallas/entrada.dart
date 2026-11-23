@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../datos/repositorio.dart';
 import '../marca.dart';
@@ -139,6 +140,20 @@ class _PantallaEntradaState extends State<PantallaEntrada> {
                     'COM-01 · despachador de combustible',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                  ),
+                  const SizedBox(height: 20),
+                  // Versión instalada al pie, leída del sistema
+                  // en tiempo de ejecución (PackageInfo): útil
+                  // para soporte antes de entrar (regla de
+                  // Miguel, 2026-11-23).
+                  FutureBuilder<PackageInfo>(
+                    future: PackageInfo.fromPlatform(),
+                    builder: (_, snap) => Text(
+                      snap.hasData ? 'v${snap.data!.version}' : '',
+                      textAlign: TextAlign.center,
+                      style:
+                          TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+                    ),
                   ),
                 ],
               ),

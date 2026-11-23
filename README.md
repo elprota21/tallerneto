@@ -55,6 +55,13 @@ queda como vitrina sin servidor y como respaldo.
 
 ## Versiones
 
+- **1.5.1 (2026-11-23)**: la app muestra su **versión instalada**
+  leída del sistema en tiempo de ejecución (PackageInfo:
+  versionName + buildNumber, nunca un texto fijo) en dos sitios:
+  una fila «Versión instalada: 1.5.1 (12)» en el Perfil, junto a
+  «Buscar actualización», y un texto pequeño «v1.5.1» al pie de
+  la pantalla de entrada (regla de Miguel, 2026-11-23: toda app
+  muestra su versión). Sin más cambios.
 - **1.5.0 (2026-11-23)**: rediseño según el prompt de Miguel,
   solo con lo que el sistema ya tiene (cero cambios de servidor)
   y UNA sola novedad de las discutidas: el **borrador local**.
