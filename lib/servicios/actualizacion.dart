@@ -145,6 +145,13 @@ class Actualizador {
       }
       final total = respuesta.contentLength ?? 0;
       var recibidos = 0;
+      // Detección de atasco: si la conexión se traba a mitad de la
+      // descarga (sin datos nuevos en ~20 s, o más de 4 min en
+      // total), se aborta sola en vez de dejar el diálogo de
+      // progreso colgado para siempre con la app «congelada».
+      var atascada = false;
+      var ultimoByte = DateTime.now();
+      final inicioDescarga = DateTime.now();
       final sink = archivo.openWrite();
       final completer = Completer<void>();
       unawaited(completer.future.catchError((_) {}));
@@ -153,20 +160,41 @@ class Actualizador {
           if (cancelado) return;
           sink.add(chunk);
           recibidos += chunk.length;
+          ultimoByte = DateTime.now();
           progreso.value = _Progreso(recibidos, total);
         },
         onDone: () => completer.complete(),
         onError: completer.completeError,
         cancelOnError: true,
       );
-      // Vigila la cancelación mientras baja.
+      // Vigila la cancelación y el atasco mientras baja.
       while (!completer.isCompleted && !cancelado) {
         await Future<void>.delayed(const Duration(milliseconds: 150));
+        final ahora = DateTime.now();
+        if (ahora.difference(ultimoByte) > const Duration(seconds: 20) ||
+            ahora.difference(inicioDescarga) > const Duration(minutes: 4)) {
+          atascada = true;
+          cancelado = true;
+        }
       }
       await suscripcion.cancel();
       await sink.close();
       if (cancelado) {
         if (await archivo.exists()) await archivo.delete();
+        if (atascada && context.mounted) {
+          // Nadie cerró el diálogo (no fue el botón CANCELAR): se
+          // cierra aquí y se avisa con un mensaje claro, para que la
+          // app quede usable y el usuario pueda reintentar.
+          if (dialogoAbierto) Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('La descarga se interrumpió por la conexión. '
+                  'Revisa tu internet y toca Buscar actualización para '
+                  'reintentar.'),
+              duration: Duration(seconds: 6),
+            ),
+          );
+        }
         return;
       }
       await completer.future; // relanza aquí si el stream falló
