@@ -75,6 +75,24 @@ class PantallaLavado extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // Encabezado por rol (1.5.0): quién soy y mi función,
+          // igual que el Inicio del mecánico.
+          Text(
+            '${saludo()}, ${datos.usuario.nombre.split(' ').first}',
+            style: Theme.of(context)
+                .textTheme
+                .headlineSmall
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          Text(
+            'Coordinador de lavado',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: cs.primary,
+            ),
+          ),
+          const SizedBox(height: 12),
           Card(
             color: cs.primaryContainer,
             child: Padding(

@@ -4,8 +4,8 @@ Una sola app, funciones según el ROL de quien entra:
 
 | Rol | Código demo | Qué ve |
 |---|---|---|
-| Mecánico a destajo | `MEC-01` | Inicio con «Llevo ganado» (suma de trabajos validados del mes) y «En revisión», Registrar trabajo por pasos, Historial, Perfil, y **solicitudes de piezas**: botón «Pedir pieza» + el estado de las suyas (pendiente / en pedido / recibida / rechazada con el motivo); al registrar un trabajo, atajo «Pedir esta pieza» en las piezas sin stock |
-| Mecánico con sueldo | `MEC-02` | Igual, pero el Inicio muestra «Tu sueldo: RD$35,000» y sus trabajos como productividad |
+| Mecánico a destajo | `MEC-01` | Inicio con «Llevo ganado» (suma de trabajos validados del mes) y «En revisión», conteos del mes por estado, Registrar trabajo por pasos (con **borrador local** reanudable), «Mis trabajos» con el detalle de cada trabajo, «Mis pagos» con el cálculo completo del mes, Perfil (con «Cambiar mi nombre» y «Cambiar mi PIN»), y **solicitudes de piezas**: botón «Pedir pieza» + el estado de las suyas (pendiente / en pedido / recibida / rechazada con el motivo); al registrar un trabajo, atajo «Pedir esta pieza» en las piezas sin stock |
+| Mecánico con sueldo | `MEC-02` | Igual, pero el Inicio muestra «Tu sueldo: RD$35,000» y sus trabajos como productividad (en «Mis pagos», conteos sin importes por trabajo) |
 | Coordinador de lavado | `LAV-01` | Interfaz de lavado: unidades de hoy con marcado/desmarcado y resumen «Lavadas hoy: X de Y» (solo si la empresa tiene el módulo activo) |
 | Despachador de combustible | `COM-01` | Interfaz de combustible: **tarjeta del tanque por tipo** («Diésel: quedan X gal», con «de N gal · P%» si la empresa fijó la capacidad, alerta «Poco combustible» y días estimados), botón **«Recibir combustible»** (tipo + galones + costo por galón + proveedor opcional; se rechaza si se pasa de la capacidad del tanque), despachos de hoy, total de galones del día y registrar despacho (vehículo + galones + tipo + odómetro que no puede bajar + costo por galón; el despacho descuenta del tanque y se rechaza si el saldo no alcanza) (solo si la empresa tiene el módulo activo) |
 
@@ -35,22 +35,55 @@ el momento, en memoria + sesión guardada en el teléfono, con las
 mismas reglas del servidor (incluido el rechazo de despacho sin
 saldo en el tanque, con el mismo mensaje).
 
-## Conexión a Supabase (preparada, sin activar)
+## Conexión a Supabase (ACTIVA desde la 1.4.0)
 
-El proyecto Supabase «taller-neto» aún no existe (límite de
-proyectos gratuitos; ver el informe del módulo). El punto de
-conexión está documentado en `lib/datos/conexion.dart`: cuando el
-proyecto exista se rellenan URL + llave anon, se aplica el SQL del
-servidor (esquema → trabajos → lavado → combustible → tanque →
-solicitudes → roles → config-ampliada) y se crea `RepositorioReal` contra las RPC
-`pr_iniciar_sesion`, `pr_datos_mecanico`, `pr_registrar_trabajo`,
-`pr_solicitar_pieza`, `pr_datos_lavado`, `pr_marcar_lavado`,
-`pr_desmarcar_lavado`, `pr_datos_combustible`,
-`pr_registrar_despacho` y `pr_registrar_recepcion`, sin tocar las
-pantallas.
+La app trabaja REAL contra el proyecto Supabase «staffride»
+(`lib/datos/conexion.dart` + `lib/datos/repositorio_real.dart`):
+RPC `pr_iniciar_sesion` (contexto 'app'; la cuenta del dueño se
+rechaza con mensaje claro), `pr_datos_mecanico`,
+`pr_registrar_trabajo`, `pr_solicitar_pieza`, `pr_datos_lavado`,
+`pr_marcar_lavado`, `pr_desmarcar_lavado`, `pr_datos_combustible`,
+`pr_registrar_despacho`, `pr_registrar_recepcion`,
+`pr_datos_inventario_app`, `pr_pasar_inventario_unidad`,
+`pr_cambiar_nombre`, `pr_cambiar_pin` (desde la 1.5.0) y
+`pr_cerrar_sesion`. Sesión con token persistida en el teléfono.
+Sin cola de envío en el repositorio real: sin conexión, error
+claro y nada se da por guardado hasta que el servidor confirma
+(la cola con «Pendiente de envío» existe solo como simulación
+dentro de la demo local). La demo (`repositorio_demo.dart`)
+queda como vitrina sin servidor y como respaldo.
 
 ## Versiones
 
+- **1.5.0 (2026-11-23)**: rediseño según el prompt de Miguel,
+  solo con lo que el sistema ya tiene (cero cambios de servidor)
+  y UNA sola novedad de las discutidas: el **borrador local**.
+  Inicio del mecánico reorganizado (encabezado con rol y modo
+  de pago, conteos del mes por estado que abren «Mis trabajos»
+  filtrado, acciones principales en grande REGISTRAR TRABAJO /
+  VER MIS TRABAJOS); el Historial pasa a llamarse **«Mis
+  trabajos»**, con **detalle por trabajo** (unidad, descripción,
+  piezas usadas y motivo de rechazo); pantalla nueva **«Mis
+  pagos»** con el cálculo completo del mes desde los datos que
+  ya bajaban (validados = lo que cobra el de destajo; el sueldo
+  ve conteos de productividad) — el sistema no tiene estado
+  «pagado» ni comprobantes para la app y no se inventaron;
+  **borrador local del formulario de trabajo** (se guarda solo
+  en el teléfono, por usuario, con aviso visible; se retoma tal
+  cual y se borra al registrar o al descartarlo; sin cola de
+  sincronización: sin internet sigue el error claro de siempre);
+  **«Cambiar mi PIN» en el Perfil** (la RPC `pr_cambiar_pin` ya
+  existía en el servidor; al cambiar el PIN el servidor revoca
+  las sesiones y la app lo avisa y vuelve a la entrada);
+  encabezados con saludo y rol en Lavado y Combustible; pasos
+  del tutorial corregidos a lo que la app real hace sin conexión.
+  NO incorporado por decisión de Miguel (2026-11-23): rol chofer
+  y reportes de avería, órdenes asignadas como entidad nueva,
+  fotos adjuntas, notificaciones push y llevar encargado /
+  inventario a la app.
+- **1.4.0 (2026-11-21)**: la «versión única» — la app se conecta
+  de verdad a producción («staffride») con `RepositorioReal`,
+  pantalla «Inventario» por unidad y «Cambiar mi nombre».
 - **1.3.1 (2026-11-21)**: terminología — en toda la app se dice
   «unidad / unidades», el término correcto y profesional (orden de
   Miguel). Solo textos; sin cambios de funciones.

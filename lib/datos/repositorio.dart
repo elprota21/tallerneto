@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../modelos.dart';
 import 'conexion.dart';
 import 'repositorio_demo.dart';
+import 'repositorio_real.dart';
 
 /// Error con un mensaje listo para mostrar: lo lanza el repositorio
 /// cuando el servidor (o la demo) rechaza la operación.
@@ -65,6 +66,25 @@ abstract class RepositorioTaller extends ChangeNotifier {
   /// Cierra la sesión y borra la guardada.
   Future<void> cerrarSesion();
 
+  /// Cambia MI nombre visible (el que ven administración y los
+  /// compañeros). El servidor (pr_cambiar_nombre) lo autoriza con
+  /// mi PIN actual: cada quien solo puede cambiar el suyo.
+  Future<void> cambiarNombre({
+    required String pinActual,
+    required String nombreNuevo,
+  });
+
+  /// Cambia MI PIN de acceso (el servidor, pr_cambiar_pin, lo
+  /// autoriza con mi PIN actual y exige 4–6 dígitos, nunca 1234).
+  /// OJO: al cambiar el PIN el servidor REVOCA todas mis
+  /// sesiones, así que tras un cambio correcto la app debe
+  /// cerrar la sesión local y pedirme entrar con el PIN nuevo
+  /// (eso lo hace la pantalla del Perfil tras esta llamada).
+  Future<void> cambiarPin({
+    required String pinActual,
+    required String pinNuevo,
+  });
+
   // ---------- mecánico ----------
   DatosMecanico? get datosMecanico;
   Future<void> recargarMecanico();
@@ -120,6 +140,26 @@ abstract class RepositorioTaller extends ChangeNotifier {
     String? nota,
   });
 
+  // ---------- inventario por unidad ----------
+
+  /// Las unidades con su ficha VIGENTE del servidor: la lista de
+  /// artículos la define el administrador en el panel y la app la
+  /// lee tal cual cada vez (nada de listas fijas en la app).
+  DatosInventarioUnidad? get datosInventarioUnidad;
+  Future<void> recargarInventarioUnidad();
+
+  /// Guarda una pasada de inventario: recorre la ficha completa
+  /// de la unidad marcando cada artículo (bueno / dañado /
+  /// faltante, con nota si hace falta). Solo quien puede pasar
+  /// inventario (mecánico o usuario autorizado desde el panel);
+  /// pasar inventario NUNCA edita la ficha. El resultado vuelve
+  /// al panel (historial de la unidad).
+  Future<RevisionInventario> pasarInventarioUnidad({
+    required String vehiculoId,
+    required List<MarcaArticulo> marcas,
+    String? nota,
+  });
+
   // ---------- cola de salida (offline) ----------
 
   /// Registros guardados en el teléfono pendientes de envío.
@@ -145,12 +185,13 @@ abstract class RepositorioTaller extends ChangeNotifier {
   Future<int> sincronizarAhora() async => 0;
 }
 
-/// Repositorio según la conexión: sin proyecto Supabase configurado,
-/// demo local completa (ver datos/conexion.dart).
+/// Repositorio según la conexión: con el proyecto Supabase de
+/// producción configurado en [Conexion], la app trabaja REAL
+/// contra el servidor (versión única 1.4.0); la demo local queda
+/// solo como respaldo si algún día se vaciara la conexión.
 RepositorioTaller crearRepositorio() {
   if (Conexion.hayConexion) {
-    // Aquí irá RepositorioReal cuando exista el proyecto (conexion.dart).
-    return RepositorioDemo();
+    return RepositorioReal();
   }
   return RepositorioDemo();
 }

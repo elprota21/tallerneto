@@ -87,7 +87,7 @@ List<_Paso> _pasosPara(String rol) {
           'Administración lo valida',
           'Tu trabajo nace PENDIENTE. Cuando administración lo '
               'valida, empieza a contar para tu pago; si lo rechaza, '
-              'verás el motivo en tu Historial.',
+              'verás el motivo en «Mis trabajos».',
         ),
         _Paso(
           Icons.shopping_cart_outlined,
@@ -105,11 +105,13 @@ List<_Paso> _pasosPara(String rol) {
               'tus trabajos cuentan como productividad.',
         ),
         _Paso(
-          Icons.cloud_off_outlined,
-          'Sin internet también trabaja',
-          'Si te quedas sin conexión, registra igual: todo queda '
-              'guardado en tu teléfono con el sello «Pendiente de '
-              'envío» y sale solo cuando vuelva el internet.',
+          Icons.drafts_outlined,
+          'Tu borrador se guarda solo',
+          'Si dejas un trabajo a medias, lo que llevas llenado '
+              'queda guardado como borrador en tu teléfono y lo '
+              'retomas donde ibas. Ojo: el trabajo solo queda '
+              'registrado cuando lo confirmas y el servidor lo '
+              'recibe.',
         ),
       ],
     'lavado' => const [
@@ -129,10 +131,11 @@ List<_Paso> _pasosPara(String rol) {
         ),
         _Paso(
           Icons.cloud_off_outlined,
-          'Sin internet también trabaja',
-          'Si te quedas sin conexión, marca igual: el cambio queda '
-              'guardado en tu teléfono con el sello «Pendiente de '
-              'envío» y sale solo cuando vuelva el internet.',
+          'Sin conexión, aviso claro',
+          'Si te quedas sin conexión, la app te lo dice claro y '
+              'el marcado no se guarda a medias: espera a tener '
+              'internet y márcalo, para que administración lo '
+              'reciba seguro.',
         ),
       ],
     'combustible' => const [
@@ -141,22 +144,28 @@ List<_Paso> _pasosPara(String rol) {
           'Despacha con odómetro',
           'Cada despacho dice la unidad, los galones y el '
               'odómetro. El odómetro nunca puede bajar del último '
-              'registrado: esa es la regla que cuida el combustible.',
+              'registrado: esa es la regla que cuida el combustible. '
+              'Despachas con el botón naranja «Registrar despacho», '
+              'abajo, y «Despachado hoy», también abajo junto a los '
+              'botones, se despliega con un toque para ver lo que '
+              'ya salió.',
         ),
         _Paso(
           Icons.oil_barrel_outlined,
           'El tanque se vigila solo',
-          'Arriba ves el tanque por tipo: cuánto queda, si está '
-              'bajo el nivel de alerta y para cuántos días alcanza. '
-              'Cuando entra una carga, regístrala en «Recibir '
-              'combustible» y el saldo sube solo.',
+          'El tanque queda fijo arriba: ves cuánto queda de cada '
+              'tipo activo de tu empresa y para cuántos días '
+              'alcanza, con su alerta si está bajo. Cuando entra '
+              'una carga, regístrala con «Recibir combustible», '
+              'también abajo, y el saldo sube solo.',
         ),
         _Paso(
           Icons.cloud_off_outlined,
-          'Sin internet también trabaja',
-          'Si te quedas sin conexión, despacha igual: el registro '
-              'queda guardado en tu teléfono con el sello «Pendiente '
-              'de envío» y sale solo cuando vuelva el internet.',
+          'Sin conexión, aviso claro',
+          'Si te quedas sin conexión, la app te lo dice claro y '
+              'el despacho no se guarda a medias: espera a tener '
+              'internet y regístralo, para que el tanque quede '
+              'bien cuadrado.',
         ),
       ],
     _ => const [

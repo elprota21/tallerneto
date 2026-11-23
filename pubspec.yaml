@@ -4,7 +4,7 @@ publish_to: 'none'
 
 # Versión de la app: 1.0.0 (primer release público, con actualización
 # automática dentro de la app desde esta primera versión).
-version: 1.3.1+6
+version: 1.5.0+11
 
 environment:
   sdk: ^3.14.0

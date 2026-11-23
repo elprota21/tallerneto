@@ -7,6 +7,7 @@ import '../servicios/actualizacion.dart';
 import 'combustible.dart';
 import 'historial.dart';
 import 'inicio.dart';
+import 'inventario_unidad.dart';
 import 'lavado.dart';
 import 'perfil.dart';
 import 'registrar.dart';
@@ -15,10 +16,13 @@ import 'tutorial.dart';
 /// Pantalla principal: las funciones dependen del ROL EN PANTALLA
 /// de quien entró (su rol activo: el principal, o el adicional si
 /// lo eligió — un usuario puede tener rol principal + adicional).
-///  - Mecánico: 4 pestañas — Inicio, Registrar, Historial, Perfil.
+///  - Mecánico: 5 pestañas — Inicio, Registrar, Mis trabajos,
+///    Inventario (por unidad), Perfil.
 ///  - Lavado: 2 pestañas — Lavado, Perfil (la interfaz de lavado en
-///    vez de la de mecánico, en la MISMA app).
-///  - Combustible: 2 pestañas — Combustible, Perfil (ídem).
+///    vez de la de mecánico, en la MISMA app); 3 si el panel lo
+///    autorizó a pasar el inventario por unidad (+ Inventario).
+///  - Combustible: 2 pestañas — Combustible, Perfil (ídem, con la
+///    misma regla del inventario).
 /// Si tiene DOS roles con pantalla y aún no eligió, primero sale
 /// el selector [PantallaElegirRol]; el cambio también vive en el
 /// Perfil. Si el adicional es almacén (sin pantalla), entra
@@ -36,6 +40,21 @@ class PantallaPrincipal extends StatefulWidget {
 class _PantallaPrincipalState extends State<PantallaPrincipal> {
   int _indice = 0;
   bool _tutorialOfrecido = false;
+
+  /// Filtro con el que «Mis trabajos» debe abrir cuando el
+  /// Inicio (o el registro recién hecho) lleva hasta ahí. La
+  /// llave fuerza una lista nueva con ese filtro puesto.
+  String _filtroTrabajos = 'todas';
+  int _llaveTrabajos = 0;
+
+  /// Ir a «Mis trabajos» con un filtro de estado ya puesto.
+  void _irAMisTrabajos(String filtro) {
+    setState(() {
+      _filtroTrabajos = filtro;
+      _llaveTrabajos++;
+      _indice = 2;
+    });
+  }
 
   @override
   void initState() {
@@ -137,6 +156,16 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     final vista = widget.repo.rolEnPantalla ?? u.rol;
 
     if (vista == 'lavado') {
+      // El inventario por unidad se suma como pestaña SOLO si el
+      // panel autorizó a este usuario a pasarlo (bandera del
+      // servidor); si no, la vista queda como siempre.
+      final conInventario = u.puedePasarInventario;
+      final paginas = <Widget>[
+        PantallaLavado(repo: widget.repo),
+        if (conInventario) PantallaInventarioUnidad(repo: widget.repo),
+        PantallaPerfil(repo: widget.repo, alCambiarRol: _alCambiarRol),
+      ];
+      final indice = _indice < paginas.length ? _indice : paginas.length - 1;
       return Scaffold(
         appBar: AppBar(
           title: const Text('${Marca.nombreApp} · Lavado'),
@@ -144,19 +173,22 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
         ),
         body: ListenableBuilder(
           listenable: widget.repo,
-          builder: (_, _) => _indice == 0
-              ? PantallaLavado(repo: widget.repo)
-              : PantallaPerfil(repo: widget.repo, alCambiarRol: _alCambiarRol),
+          builder: (_, _) => paginas[indice],
         ),
         bottomNavigationBar: NavigationBar(
-          selectedIndex: _indice,
+          selectedIndex: indice,
           onDestinationSelected: (i) => setState(() => _indice = i),
-          destinations: const [
-            NavigationDestination(
+          destinations: [
+            const NavigationDestination(
                 icon: Icon(Icons.local_car_wash_outlined),
                 selectedIcon: Icon(Icons.local_car_wash),
                 label: 'Lavado'),
-            NavigationDestination(
+            if (conInventario)
+              const NavigationDestination(
+                  icon: Icon(Icons.fact_check_outlined),
+                  selectedIcon: Icon(Icons.fact_check),
+                  label: 'Inventario'),
+            const NavigationDestination(
                 icon: Icon(Icons.person_outline),
                 selectedIcon: Icon(Icons.person),
                 label: 'Perfil'),
@@ -166,6 +198,14 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     }
 
     if (vista == 'combustible') {
+      // Ídem lavado: pestaña de inventario solo si está autorizado.
+      final conInventario = u.puedePasarInventario;
+      final paginas = <Widget>[
+        PantallaCombustible(repo: widget.repo),
+        if (conInventario) PantallaInventarioUnidad(repo: widget.repo),
+        PantallaPerfil(repo: widget.repo, alCambiarRol: _alCambiarRol),
+      ];
+      final indice = _indice < paginas.length ? _indice : paginas.length - 1;
       return Scaffold(
         appBar: AppBar(
           title: const Text('${Marca.nombreApp} · Combustible'),
@@ -173,19 +213,22 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
         ),
         body: ListenableBuilder(
           listenable: widget.repo,
-          builder: (_, _) => _indice == 0
-              ? PantallaCombustible(repo: widget.repo)
-              : PantallaPerfil(repo: widget.repo, alCambiarRol: _alCambiarRol),
+          builder: (_, _) => paginas[indice],
         ),
         bottomNavigationBar: NavigationBar(
-          selectedIndex: _indice,
+          selectedIndex: indice,
           onDestinationSelected: (i) => setState(() => _indice = i),
-          destinations: const [
-            NavigationDestination(
+          destinations: [
+            const NavigationDestination(
                 icon: Icon(Icons.local_gas_station_outlined),
                 selectedIcon: Icon(Icons.local_gas_station),
                 label: 'Combustible'),
-            NavigationDestination(
+            if (conInventario)
+              const NavigationDestination(
+                  icon: Icon(Icons.fact_check_outlined),
+                  selectedIcon: Icon(Icons.fact_check),
+                  label: 'Inventario'),
+            const NavigationDestination(
                 icon: Icon(Icons.person_outline),
                 selectedIcon: Icon(Icons.person),
                 label: 'Perfil'),
@@ -195,11 +238,18 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     }
 
     final pantallas = [
-      PantallaInicio(repo: widget.repo),
+      PantallaInicio(
+        repo: widget.repo,
+        alRegistrar: () => setState(() => _indice = 1),
+        alVerTrabajos: _irAMisTrabajos,
+      ),
       PantallaRegistrar(
         repo: widget.repo,
         alTerminar: () {
-          setState(() => _indice = 2);
+          // El trabajo recién registrado nace pendiente: se
+          // aterriza en «Mis trabajos» filtrado a pendientes,
+          // para verlo ahí mismo con su sello.
+          _irAMisTrabajos('pendiente');
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
@@ -208,7 +258,12 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
           );
         },
       ),
-      PantallaHistorial(repo: widget.repo),
+      PantallaMisTrabajos(
+        key: ValueKey('trabajos-$_llaveTrabajos'),
+        repo: widget.repo,
+        filtroInicial: _filtroTrabajos,
+      ),
+      PantallaInventarioUnidad(repo: widget.repo),
       PantallaPerfil(repo: widget.repo, alCambiarRol: _alCambiarRol),
     ];
 
@@ -231,9 +286,13 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
               selectedIcon: Icon(Icons.add_circle),
               label: 'Registrar'),
           NavigationDestination(
-              icon: Icon(Icons.history_outlined),
-              selectedIcon: Icon(Icons.history),
-              label: 'Historial'),
+              icon: Icon(Icons.assignment_outlined),
+              selectedIcon: Icon(Icons.assignment),
+              label: 'Mis trabajos'),
+          NavigationDestination(
+              icon: Icon(Icons.fact_check_outlined),
+              selectedIcon: Icon(Icons.fact_check),
+              label: 'Inventario'),
           NavigationDestination(
               icon: Icon(Icons.person_outline),
               selectedIcon: Icon(Icons.person),

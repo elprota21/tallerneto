@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 
 import '../datos/repositorio.dart';
 import '../modelos.dart';
+import '../servicios/borrador.dart';
 import 'comun.dart';
 import 'pedir_pieza.dart';
 
@@ -11,12 +14,19 @@ import 'pedir_pieza.dart';
 ///   3 · Piezas usadas (opcional) → 4 · Descripción (opcional) →
 ///   5 · Confirmación «¿Terminaste este trabajo?» con el resumen.
 /// El trabajo nace PENDIENTE: lo valida administración en el panel.
+///
+/// BORRADOR LOCAL (1.5.0, decisión de Miguel): lo que se va
+/// llenando se guarda SOLO en este teléfono (ver
+/// servicios/borrador.dart) y al volver se retoma tal cual, con
+/// su aviso visible. El borrador no se envía solo ni cuenta como
+/// registrado: solo el botón de confirmar, con el servidor
+/// confirmando, crea el trabajo — y ahí el borrador se borra.
 class PantallaRegistrar extends StatefulWidget {
   const PantallaRegistrar({super.key, required this.repo, required this.alTerminar});
 
   final RepositorioTaller repo;
 
-  /// Al registrar con éxito (la principal cambia a Historial).
+  /// Al registrar con éxito (la principal cambia a Mis trabajos).
   final VoidCallback alTerminar;
 
   @override
@@ -31,7 +41,28 @@ class _PantallaRegistrarState extends State<PantallaRegistrar> {
   final _descripcion = TextEditingController();
   bool _enviando = false;
 
+  /// Borrador: el usuario dueño del borrador y el cargado del
+  /// teléfono que aún no se ha volcado al formulario.
+  String? _usuarioId;
+  BorradorTrabajo? _pendienteRestaurar;
+  bool _hayBorrador = false;
+
   static const _titulos = ['Vehículo', 'Trabajo', 'Piezas', 'Nota', 'Confirmar'];
+
+  @override
+  void initState() {
+    super.initState();
+    _usuarioId = widget.repo.sesion?.id;
+    final id = _usuarioId;
+    if (id != null) {
+      unawaited(() async {
+        final b = await BorradorTrabajoStore.cargar(id);
+        if (b != null && mounted) {
+          setState(() => _pendienteRestaurar = b);
+        }
+      }());
+    }
+  }
 
   bool get _puedeSeguir {
     return switch (_paso) {
@@ -39,6 +70,88 @@ class _PantallaRegistrarState extends State<PantallaRegistrar> {
       1 => _tipo != null,
       _ => true,
     };
+  }
+
+  /// Guarda el estado actual del formulario como borrador en el
+  /// teléfono (si quedó vacío, el almacén lo borra solo).
+  void _guardarBorrador() {
+    final id = _usuarioId;
+    if (id == null) return;
+    final b = BorradorTrabajo(
+      usuarioId: id,
+      vehiculoId: _vehiculo?.id,
+      tipoTrabajoId: _tipo?.id,
+      piezas: Map.of(_piezas),
+      descripcion: _descripcion.text,
+      paso: _paso,
+      guardadoEn: DateTime.now().toIso8601String(),
+    );
+    unawaited(BorradorTrabajoStore.guardar(b));
+    if (b.tieneContenido && !_hayBorrador) {
+      setState(() => _hayBorrador = true);
+    }
+  }
+
+  /// Vuelca el borrador cargado al formulario (solo lo que sigue
+  /// existiendo en los datos del servidor: unidad, tipo y piezas).
+  void _restaurar(BorradorTrabajo b, DatosMecanico datos) {
+    Vehiculo? vehiculo;
+    for (final v in datos.vehiculos) {
+      if (v.id == b.vehiculoId) vehiculo = v;
+    }
+    TipoTrabajo? tipo;
+    for (final t in datos.tiposTrabajo) {
+      if (t.id == b.tipoTrabajoId) tipo = t;
+    }
+    final piezas = <String, int>{};
+    for (final e in b.piezas.entries) {
+      if (e.value > 0 && datos.piezas.any((p) => p.id == e.key)) {
+        piezas[e.key] = e.value;
+      }
+    }
+    var paso = b.paso;
+    if (vehiculo == null) {
+      paso = 0;
+    } else if (tipo == null && paso > 1) {
+      paso = 1;
+    }
+    setState(() {
+      _vehiculo = vehiculo;
+      _tipo = tipo;
+      _piezas
+        ..clear()
+        ..addAll(piezas);
+      _descripcion.text = b.descripcion;
+      _paso = paso.clamp(0, 4);
+      _hayBorrador = true;
+    });
+  }
+
+  Future<void> _descartarBorrador() async {
+    final confirma = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Descartar borrador'),
+        content: const Text(
+            'Se borra el trabajo a medias guardado en este teléfono '
+            'y el formulario queda en blanco. ¿Seguro?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Sí, descartar'),
+          ),
+        ],
+      ),
+    );
+    if (confirma != true) return;
+    final id = _usuarioId;
+    if (id != null) await BorradorTrabajoStore.borrar(id);
+    _reiniciar();
+    if (mounted) setState(() => _hayBorrador = false);
   }
 
   void _reiniciar() {
@@ -63,6 +176,11 @@ class _PantallaRegistrarState extends State<PantallaRegistrar> {
             .toList(),
         descripcion: _descripcion.text,
       );
+      // El servidor ya confirmó el trabajo: el borrador cumplió
+      // y se borra (nunca queda un borrador de algo registrado).
+      final id = _usuarioId;
+      if (id != null) await BorradorTrabajoStore.borrar(id);
+      _hayBorrador = false;
       _reiniciar();
       widget.alTerminar();
     } catch (e) {
@@ -87,8 +205,51 @@ class _PantallaRegistrarState extends State<PantallaRegistrar> {
     if (datos == null) {
       return const Center(child: CircularProgressIndicator());
     }
+    // Si había un borrador guardado en el teléfono, se vuelca al
+    // formulario en cuanto están los datos para resolver sus ids.
+    final pendiente = _pendienteRestaurar;
+    if (pendiente != null) {
+      _pendienteRestaurar = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _restaurar(pendiente, datos);
+      });
+    }
+    final oscuro = Theme.of(context).brightness == Brightness.dark;
+    final colorBorrador =
+        oscuro ? const Color(0xFFFBBF24) : const Color(0xFF92400E);
     return Column(
       children: [
+        // Aviso del borrador: visible mientras el trabajo a
+        // medias vive solo en el teléfono.
+        if (_hayBorrador)
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.5)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.drafts_outlined, size: 18, color: colorBorrador),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Borrador guardado en este teléfono: todavía no '
+                    'está en el sistema. Se registra solo cuando '
+                    'confirmes el trabajo.',
+                    style: TextStyle(fontSize: 12.5, color: colorBorrador),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _descartarBorrador,
+                  child: const Text('Descartar'),
+                ),
+              ],
+            ),
+          ),
         // Indicador de pasos
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -129,13 +290,23 @@ class _PantallaRegistrarState extends State<PantallaRegistrar> {
             children: [
               if (_paso > 0)
                 OutlinedButton(
-                  onPressed: _enviando ? null : () => setState(() => _paso -= 1),
+                  onPressed: _enviando
+                      ? null
+                      : () {
+                          setState(() => _paso -= 1);
+                          _guardarBorrador();
+                        },
                   child: const Text('Atrás'),
                 ),
               const Spacer(),
               if (_paso < 4)
                 FilledButton(
-                  onPressed: _puedeSeguir ? () => setState(() => _paso += 1) : null,
+                  onPressed: _puedeSeguir
+                      ? () {
+                          setState(() => _paso += 1);
+                          _guardarBorrador();
+                        }
+                      : null,
                   child: const Text('Continuar'),
                 ),
               if (_paso == 4)
@@ -169,7 +340,10 @@ class _PantallaRegistrarState extends State<PantallaRegistrar> {
                       ? const Icon(Icons.check_circle)
                       : const Icon(Icons.circle_outlined),
                   selected: _vehiculo?.id == v.id,
-                  onTap: () => setState(() => _vehiculo = v),
+                  onTap: () {
+                    setState(() => _vehiculo = v);
+                    _guardarBorrador();
+                  },
                 ),
               ),
             ),
@@ -203,7 +377,10 @@ class _PantallaRegistrarState extends State<PantallaRegistrar> {
                     ],
                   ),
                   selected: _tipo?.id == t.id,
-                  onTap: () => setState(() => _tipo = t),
+                  onTap: () {
+                    setState(() => _tipo = t);
+                    _guardarBorrador();
+                  },
                 ),
               ),
             ),
@@ -238,21 +415,26 @@ class _PantallaRegistrarState extends State<PantallaRegistrar> {
                             icon: const Icon(Icons.remove_circle_outline),
                             onPressed: cantidad == 0
                                 ? null
-                                : () => setState(() {
+                                : () {
+                                    setState(() {
                                       if (cantidad <= 1) {
                                         _piezas.remove(p.id);
                                       } else {
                                         _piezas[p.id] = cantidad - 1;
                                       }
-                                    }),
+                                    });
+                                    _guardarBorrador();
+                                  },
                           ),
                           Text('$cantidad',
                               style: const TextStyle(
                                   fontSize: 16, fontWeight: FontWeight.bold)),
                           IconButton(
                             icon: const Icon(Icons.add_circle_outline),
-                            onPressed: () =>
-                                setState(() => _piezas[p.id] = cantidad + 1),
+                            onPressed: () {
+                              setState(() => _piezas[p.id] = cantidad + 1);
+                              _guardarBorrador();
+                            },
                           ),
                         ],
                       ),
@@ -301,6 +483,7 @@ class _PantallaRegistrarState extends State<PantallaRegistrar> {
             TextField(
               controller: _descripcion,
               maxLines: 4,
+              onChanged: (_) => _guardarBorrador(),
               decoration: const InputDecoration(
                 hintText: 'Ej.: Pastillas delanteras, sonaban al frenar',
                 border: OutlineInputBorder(),

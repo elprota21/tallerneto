@@ -1,23 +1,44 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../datos/repositorio.dart';
+import '../modelos.dart';
 
 import 'comun.dart';
+import 'mis_pagos.dart';
 import 'pedir_pieza.dart';
 
-/// Inicio del mecánico: saludo, su dinero según su modo de pago,
-/// sus trabajos de hoy con su estado, y SUS SOLICITUDES DE PIEZAS
-/// con el botón «Pedir pieza» (administración las gestiona en el
-/// panel; aquí ve si están pendientes, en pedido, recibidas o
-/// rechazadas con el motivo).
+/// Inicio del mecánico (rediseño 1.5.0): encabezado con su
+/// nombre, su rol y su empresa; su dinero según su modo de pago
+/// (la tarjeta abre «Mis pagos», el detalle completo); los
+/// conteos de SUS trabajos de este mes por estado real
+/// (pendiente de validación / validada / rechazada), que llevan
+/// a «Mis trabajos» con ese filtro puesto; las DOS acciones
+/// principales en grande (REGISTRAR TRABAJO y VER MIS TRABAJOS);
+/// sus trabajos de hoy; y SUS SOLICITUDES DE PIEZAS con el botón
+/// «Pedir pieza» (administración las gestiona en el panel; aquí
+/// ve si están pendientes, en pedido, recibidas o rechazadas
+/// con el motivo).
 ///  - Destajo: «Llevo ganado RD$X» (validados del mes) y
 ///    «RD$Y en revisión» (pendientes).
 ///  - Sueldo: «Tu sueldo: RD$X» y el conteo de trabajos realizados;
 ///    los trabajos no le suman dinero.
 class PantallaInicio extends StatelessWidget {
-  const PantallaInicio({super.key, required this.repo});
+  const PantallaInicio({
+    super.key,
+    required this.repo,
+    this.alRegistrar,
+    this.alVerTrabajos,
+  });
 
   final RepositorioTaller repo;
+
+  /// Acción principal: ir a la pestaña «Registrar» (la pone la
+  /// principal). Sin ella, el botón no se muestra.
+  final VoidCallback? alRegistrar;
+
+  /// Ir a «Mis trabajos» con un filtro de estado ya puesto
+  /// ('pendiente' | 'validada' | 'rechazada' | 'todas').
+  final void Function(String filtro)? alVerTrabajos;
 
   @override
   Widget build(BuildContext context) {
@@ -29,17 +50,25 @@ class PantallaInicio extends StatelessWidget {
     final hoy = DateTime.now();
     final hoyIso =
         '${hoy.year.toString().padLeft(4, '0')}-${hoy.month.toString().padLeft(2, '0')}-${hoy.day.toString().padLeft(2, '0')}';
+    final mesIso = '${hoyIso.substring(0, 8)}01';
     final deHoy = datos.trabajos.where((t) => t.fecha == hoyIso).toList();
-    final validadosMes =
-        datos.trabajos.where((t) => t.estado == 'validada').length;
-    final pendientesMes =
-        datos.trabajos.where((t) => t.estado == 'pendiente').length;
+    final delMes =
+        datos.trabajos.where((t) => t.fecha.compareTo(mesIso) >= 0).toList();
+    final validadosMes = delMes.where((t) => t.estado == 'validada').length;
+    final pendientesMes = delMes.where((t) => t.estado == 'pendiente').length;
+    final rechazadosMes = delMes.where((t) => t.estado == 'rechazada').length;
 
     String etiquetaVehiculo(String id) {
       for (final v in datos.vehiculos) {
         if (v.id == id) return v.etiqueta;
       }
       return 'Vehículo';
+    }
+
+    void abrirMisPagos() {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => PantallaMisPagos(repo: repo)),
+      );
     }
 
     return RefreshIndicator(
@@ -59,6 +88,15 @@ class PantallaInicio extends StatelessWidget {
             style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
+          Text(
+            '${Usuario.etiquetaDe(u.rol)} · '
+            '${u.esSueldo ? 'Sueldo fijo' : 'Pago a destajo'}',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
           const SizedBox(height: 16),
           if (u.esSueldo) ...[
             _TarjetaDinero(
@@ -66,15 +104,19 @@ class PantallaInicio extends StatelessWidget {
               monto: dinero(u.sueldoMonto ?? 0),
               detalle: 'Salario fijo mensual. Tus trabajos cuentan como '
                   'productividad: llevas $validadosMes validados y '
-                  '$pendientesMes en revisión este período.',
+                  '$pendientesMes en revisión este mes. '
+                  'Toca para ver «Mis pagos».',
               icono: Icons.payments_outlined,
+              alTocar: abrirMisPagos,
             ),
           ] else ...[
             _TarjetaDinero(
               titulo: 'Llevo ganado',
               monto: dinero(datos.totalValidadoMes),
-              detalle: 'Trabajos validados de este mes (a destajo).',
+              detalle: 'Trabajos validados de este mes (a destajo). '
+                  'Toca para ver «Mis pagos».',
               icono: Icons.payments_outlined,
+              alTocar: abrirMisPagos,
             ),
             const SizedBox(height: 12),
             _TarjetaDinero(
@@ -83,8 +125,74 @@ class PantallaInicio extends StatelessWidget {
               detalle: 'Trabajos pendientes de validar en administración.',
               icono: Icons.hourglass_top_outlined,
               secundaria: true,
+              alTocar: abrirMisPagos,
             ),
           ],
+          const SizedBox(height: 16),
+          // Conteos de MIS trabajos de este mes, por estado real.
+          // Cada tarjeta lleva a «Mis trabajos» con su filtro.
+          Row(
+            children: [
+              Expanded(
+                child: TarjetaConteo(
+                  etiqueta: 'En revisión',
+                  valor: '$pendientesMes',
+                  icono: Icons.hourglass_top_outlined,
+                  alTocar: () => alVerTrabajos?.call('pendiente'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TarjetaConteo(
+                  etiqueta: 'Validados',
+                  valor: '$validadosMes',
+                  icono: Icons.check_circle_outline,
+                  alTocar: () => alVerTrabajos?.call('validada'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TarjetaConteo(
+                  etiqueta: 'Rechazados',
+                  valor: '$rechazadosMes',
+                  icono: Icons.cancel_outlined,
+                  alTocar: () => alVerTrabajos?.call('rechazada'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Las dos acciones principales, en grande.
+          if (alRegistrar != null) ...[
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: alRegistrar,
+                icon: const Icon(Icons.add_circle_outline),
+                label: const Text('REGISTRAR TRABAJO'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  textStyle: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          if (alVerTrabajos != null)
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                onPressed: () => alVerTrabajos!.call('todas'),
+                icon: const Icon(Icons.assignment_outlined),
+                label: const Text('VER MIS TRABAJOS'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  textStyle: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
           const SizedBox(height: 24),
           Text(
             'Mis trabajos de hoy (${deHoy.length})',
@@ -216,6 +324,7 @@ class _TarjetaDinero extends StatelessWidget {
     required this.detalle,
     required this.icono,
     this.secundaria = false,
+    this.alTocar,
   });
 
   final String titulo;
@@ -224,45 +333,61 @@ class _TarjetaDinero extends StatelessWidget {
   final IconData icono;
   final bool secundaria;
 
+  /// Al tocarla (abre «Mis pagos» con el detalle completo).
+  final VoidCallback? alTocar;
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Card(
+      clipBehavior: Clip.antiAlias,
       color: secundaria ? cs.surfaceContainerHighest : cs.primaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(icono,
-                size: 36,
-                color: secundaria ? cs.onSurfaceVariant : cs.onPrimaryContainer),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(titulo,
-                      style: TextStyle(
-                          color: secundaria
-                              ? cs.onSurfaceVariant
-                              : cs.onPrimaryContainer)),
-                  Text(
-                    monto,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: secundaria ? null : cs.onPrimaryContainer,
-                        ),
-                  ),
-                  Text(detalle,
-                      style: TextStyle(
-                          fontSize: 13,
-                          color: secundaria
-                              ? cs.onSurfaceVariant
-                              : cs.onPrimaryContainer)),
-                ],
+      child: InkWell(
+        onTap: alTocar,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(icono,
+                  size: 36,
+                  color:
+                      secundaria ? cs.onSurfaceVariant : cs.onPrimaryContainer),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(titulo,
+                        style: TextStyle(
+                            color: secundaria
+                                ? cs.onSurfaceVariant
+                                : cs.onPrimaryContainer)),
+                    Text(
+                      monto,
+                      style:
+                          Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: secundaria
+                                    ? null
+                                    : cs.onPrimaryContainer,
+                              ),
+                    ),
+                    Text(detalle,
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: secundaria
+                                ? cs.onSurfaceVariant
+                                : cs.onPrimaryContainer)),
+                  ],
+                ),
               ),
-            ),
-          ],
+              if (alTocar != null)
+                Icon(Icons.chevron_right,
+                    color: secundaria
+                        ? cs.onSurfaceVariant
+                        : cs.onPrimaryContainer),
+            ],
+          ),
         ),
       ),
     );

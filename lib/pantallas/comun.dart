@@ -144,6 +144,52 @@ class ChipPendienteEnvio extends StatelessWidget {
   }
 }
 
+/// Tarjeta pequeña de conteo (Inicio y Mis pagos): un número
+/// grande con su etiqueta y un icono. Si trae [alTocar], toda la
+/// tarjeta es un botón (p. ej. ir a «Mis trabajos» con ese
+/// filtro ya puesto).
+class TarjetaConteo extends StatelessWidget {
+  const TarjetaConteo({
+    super.key,
+    required this.etiqueta,
+    required this.valor,
+    required this.icono,
+    this.alTocar,
+  });
+
+  final String etiqueta;
+  final String valor;
+  final IconData icono;
+  final VoidCallback? alTocar;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: alTocar,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          child: Column(
+            children: [
+              Icon(icono, color: cs.primary),
+              const SizedBox(height: 4),
+              Text(valor,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold)),
+              Text(etiqueta,
+                  textAlign: TextAlign.center,
+                  style:
+                      TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Saludo según la hora del día.
 String saludo() {
   final h = DateTime.now().hour;

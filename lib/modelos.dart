@@ -22,6 +22,7 @@ class Usuario {
     this.rolAdicional,
     this.modoPago = 'destajo',
     this.sueldoMonto,
+    this.puedeInventarioUnidad = false,
   });
 
   final String id;
@@ -41,6 +42,20 @@ class Usuario {
   /// o 'sueldo' (salario fijo mensual).
   final String modoPago;
   final double? sueldoMonto;
+
+  /// Permiso individual para pasar el inventario por unidad,
+  /// concedido por el administrador desde el panel (servidor:
+  /// usuarios.puede_inventario_unidad). Espejo de la regla del
+  /// servidor (pr__inv_puede_pasar): pueden SIEMPRE el mecánico
+  /// (rol o rol adicional) y el administrador; cualquier otro
+  /// usuario, solo con esta bandera encendida.
+  final bool puedeInventarioUnidad;
+
+  bool get puedePasarInventario =>
+      rol == 'mecanico' ||
+      rol == 'admin' ||
+      rolAdicional == 'mecanico' ||
+      puedeInventarioUnidad;
 
   bool get esSueldo => modoPago == 'sueldo';
   bool get esLavado => rol == 'lavado';
@@ -80,6 +95,7 @@ class Usuario {
         rolAdicional: j['rolAdicional']?.toString(),
         modoPago: j['modoPago']?.toString() ?? 'destajo',
         sueldoMonto: (j['sueldoMonto'] as num?)?.toDouble(),
+        puedeInventarioUnidad: j['puedeInventarioUnidad'] == true,
       );
 }
 
@@ -758,6 +774,235 @@ class DatosLavado {
         fecha: j['fecha'].toString(),
         vehiculos: ((j['vehiculos'] as List?) ?? const [])
             .map((v) => VehiculoLavado.desdeJson(v as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+// ---------- inventario por unidad (servidor/inventario-unidad.sql) ----------
+
+/// Un artículo de la ficha de una unidad: lo que la unidad DEBE
+/// llevar según definió el administrador en el panel, con el
+/// estado que dejó la última pasada. La app nunca inventa esta
+/// lista: viene tal cual del servidor (pr_datos_inventario_app)
+/// cada vez que se cargan los datos.
+class ArticuloFichaUnidad {
+  const ArticuloFichaUnidad({
+    required this.id,
+    required this.nombre,
+    required this.categoria,
+    required this.cantidadEsperada,
+    required this.estado,
+    this.nota,
+    this.ultimaRevisionEn,
+  });
+
+  final String id;
+  final String nombre;
+
+  /// 'llantas' | 'llaves' | 'herramientas' | 'seguridad' |
+  /// 'repuestos' | 'otros'
+  final String categoria;
+  final int cantidadEsperada;
+
+  /// 'sin_revisar' | 'bueno' | 'danado' | 'faltante'
+  final String estado;
+  final String? nota;
+
+  /// ISO con hora de la última pasada que marcó este artículo.
+  final String? ultimaRevisionEn;
+
+  static String etiquetaCategoria(String c) => switch (c) {
+        'llantas' => 'Llantas',
+        'llaves' => 'Llaves',
+        'herramientas' => 'Herramientas',
+        'seguridad' => 'Seguridad',
+        'repuestos' => 'Repuestos',
+        _ => 'Otros',
+      };
+
+  static String etiquetaEstado(String e) => switch (e) {
+        'bueno' => 'Bueno',
+        'danado' => 'Dañado',
+        'faltante' => 'Faltante',
+        _ => 'Sin revisar',
+      };
+
+  factory ArticuloFichaUnidad.desdeJson(Map<String, dynamic> j) =>
+      ArticuloFichaUnidad(
+        id: j['id'].toString(),
+        nombre: j['nombre'].toString(),
+        categoria: j['categoria'].toString(),
+        cantidadEsperada: (j['cantidadEsperada'] as num?)?.toInt() ?? 1,
+        estado: j['estado']?.toString() ?? 'sin_revisar',
+        nota: j['nota']?.toString(),
+        ultimaRevisionEn: j['ultimaRevisionEn']?.toString(),
+      );
+}
+
+/// Una unidad con su ficha vigente (la del servidor, no una copia
+/// fija de la app).
+class UnidadInventarioFicha {
+  const UnidadInventarioFicha({
+    required this.vehiculo,
+    required this.tieneFicha,
+    required this.estadoGeneral,
+    this.ultimaRevisionEn,
+    this.ultimaRevisionPor,
+    this.numFaltantes = 0,
+    this.numDanados = 0,
+    this.articulos = const [],
+  });
+
+  final Vehiculo vehiculo;
+  final bool tieneFicha;
+
+  /// 'sin_ficha' | 'sin_revisar' | 'con_faltantes' |
+  /// 'con_danados' | 'completa'
+  final String estadoGeneral;
+  final String? ultimaRevisionEn;
+  final String? ultimaRevisionPor;
+  final int numFaltantes;
+  final int numDanados;
+  final List<ArticuloFichaUnidad> articulos;
+
+  static String etiquetaGeneral(String e) => switch (e) {
+        'completa' => 'Completa',
+        'con_faltantes' => 'Con faltantes',
+        'con_danados' => 'Con dañados',
+        'sin_revisar' => 'Sin revisar',
+        _ => 'Sin ficha',
+      };
+
+  factory UnidadInventarioFicha.desdeJson(Map<String, dynamic> j) =>
+      UnidadInventarioFicha(
+        vehiculo: Vehiculo.desdeJson(j),
+        tieneFicha: j['tieneFicha'] == true,
+        estadoGeneral: j['estadoGeneral']?.toString() ?? 'sin_ficha',
+        ultimaRevisionEn: j['ultimaRevisionEn']?.toString(),
+        ultimaRevisionPor: j['ultimaRevisionPor']?.toString(),
+        numFaltantes: (j['numFaltantes'] as num?)?.toInt() ?? 0,
+        numDanados: (j['numDanados'] as num?)?.toInt() ?? 0,
+        articulos: ((j['articulos'] as List?) ?? const [])
+            .map((a) => ArticuloFichaUnidad.desdeJson(a as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+/// Todo lo que la pantalla de inventario por unidad necesita:
+/// quién entró, si puede pasar inventario y las unidades con su
+/// ficha VIGENTE del servidor.
+class DatosInventarioUnidad {
+  const DatosInventarioUnidad({
+    required this.usuario,
+    required this.empresa,
+    required this.fecha,
+    required this.puedePasar,
+    required this.unidades,
+  });
+
+  final Usuario usuario;
+  final Empresa empresa;
+
+  /// yyyy-mm-dd (hoy, hora RD en el servidor).
+  final String fecha;
+
+  /// ¿Quien entró puede pasar inventario? (regla del servidor).
+  final bool puedePasar;
+  final List<UnidadInventarioFicha> unidades;
+
+  factory DatosInventarioUnidad.desdeJson(Map<String, dynamic> j) =>
+      DatosInventarioUnidad(
+        usuario: Usuario.desdeJson(j['usuario'] as Map<String, dynamic>),
+        empresa: Empresa.desdeJson(j['empresa'] as Map<String, dynamic>),
+        fecha: j['fecha'].toString(),
+        puedePasar: j['puedePasar'] == true,
+        unidades: ((j['unidades'] as List?) ?? const [])
+            .map((u) =>
+                UnidadInventarioFicha.desdeJson(u as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+/// La marca de UN artículo en una pasada: su estado y una nota
+/// opcional. La pasada debe cubrir TODOS los artículos de la
+/// ficha (el servidor lo exige).
+class MarcaArticulo {
+  const MarcaArticulo({
+    required this.articuloId,
+    required this.estado,
+    this.nota,
+  });
+
+  final String articuloId;
+
+  /// 'bueno' | 'danado' | 'faltante'
+  final String estado;
+  final String? nota;
+
+  Map<String, dynamic> aJson() => {
+        'articuloId': articuloId,
+        'estado': estado,
+        if (nota != null && nota!.trim().isNotEmpty) 'nota': nota!.trim(),
+      };
+}
+
+/// Una diferencia detectada en una pasada: un artículo que no
+/// quedó «bueno».
+class DiferenciaRevision {
+  const DiferenciaRevision({
+    required this.nombre,
+    required this.estado,
+    this.nota,
+  });
+
+  final String nombre;
+
+  /// 'danado' | 'faltante'
+  final String estado;
+  final String? nota;
+
+  factory DiferenciaRevision.desdeJson(Map<String, dynamic> j) =>
+      DiferenciaRevision(
+        nombre: j['nombre'].toString(),
+        estado: j['estado'].toString(),
+        nota: j['nota']?.toString(),
+      );
+}
+
+/// El resultado de guardar una pasada (lo que devuelve
+/// pr_pasar_inventario_unidad): conteos y diferencias. El panel
+/// ve esta misma revisión en el historial de la unidad.
+class RevisionInventario {
+  const RevisionInventario({
+    required this.id,
+    required this.fecha,
+    required this.total,
+    required this.buenos,
+    required this.danados,
+    required this.faltantes,
+    this.diferencias = const [],
+  });
+
+  final String id;
+
+  /// yyyy-mm-dd
+  final String fecha;
+  final int total;
+  final int buenos;
+  final int danados;
+  final int faltantes;
+  final List<DiferenciaRevision> diferencias;
+
+  factory RevisionInventario.desdeJson(Map<String, dynamic> j) =>
+      RevisionInventario(
+        id: j['id'].toString(),
+        fecha: j['fecha'].toString(),
+        total: (j['total'] as num?)?.toInt() ?? 0,
+        buenos: (j['buenos'] as num?)?.toInt() ?? 0,
+        danados: (j['danados'] as num?)?.toInt() ?? 0,
+        faltantes: (j['faltantes'] as num?)?.toInt() ?? 0,
+        diferencias: ((j['diferencias'] as List?) ?? const [])
+            .map((d) => DiferenciaRevision.desdeJson(d as Map<String, dynamic>))
             .toList(),
       );
 }

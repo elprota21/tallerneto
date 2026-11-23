@@ -6,6 +6,7 @@ import '../modelos.dart';
 import '../servicios/actualizacion.dart';
 import '../servicios/tema.dart';
 import 'comun.dart';
+import 'mis_pagos.dart';
 import 'tutorial.dart';
 
 /// Perfil: mis datos (con mis DOS roles si tengo adicional), mi
@@ -60,6 +61,89 @@ class PantallaPerfil extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 24),
+        // Cambiar mi nombre: el nombre visible con el que me ven
+        // administración y los compañeros; se confirma con mi PIN
+        // actual (el servidor solo deja cambiar el nombre propio).
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.badge_outlined),
+            title: const Text('Cambiar mi nombre'),
+            subtitle:
+                const Text('El nombre que ven administración y tus compañeros.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (_) =>
+                    _DialogoCambiarNombre(repo: repo, nombreActual: u.nombre),
+              );
+              if (ok == true && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Tu nombre se cambió. ✅')),
+                );
+              }
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Cambiar mi PIN: la app lo estrena en la 1.5.0 (la
+        // función del servidor, pr_cambiar_pin, ya existía y la
+        // usa el panel). Al cambiarlo, el servidor revoca las
+        // sesiones: la app avisa y cierra la sesión para entrar
+        // con el PIN nuevo.
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.pin_outlined),
+            title: const Text('Cambiar mi PIN'),
+            subtitle: const Text(
+                'Tu clave de entrada de 4 a 6 dígitos. Al cambiarlo '
+                'tendrás que entrar de nuevo.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (_) => _DialogoCambiarPin(repo: repo),
+              );
+              if (ok == true && context.mounted) {
+                await showDialog<void>(
+                  context: context,
+                  builder: (c) => AlertDialog(
+                    title: const Text('PIN cambiado ✅'),
+                    content: const Text(
+                        'Por seguridad se cerró tu sesión. Entra de '
+                        'nuevo con tu PIN nuevo.'),
+                    actions: [
+                      FilledButton(
+                        onPressed: () => Navigator.pop(c),
+                        child: const Text('Entendido'),
+                      ),
+                    ],
+                  ),
+                );
+                await repo.cerrarSesion();
+              }
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Mis pagos: solo el mecánico cobra por trabajos (a
+        // destajo o como productividad de su sueldo).
+        if (u.rolesApp.contains('mecanico'))
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.payments_outlined),
+              title: const Text('Mis pagos'),
+              subtitle: const Text(
+                  'El detalle de tu dinero de este mes, trabajo por trabajo.'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => PantallaMisPagos(repo: repo),
+                ),
+              ),
+            ),
+          ),
+        if (u.rolesApp.contains('mecanico')) const SizedBox(height: 8),
         // Cambiar de función: solo si tengo DOS roles con pantalla.
         // (El adicional almacén no tiene pantalla en la app: ese
         // sombrero se ejerce en el panel, aquí no hay nada que
@@ -256,6 +340,221 @@ class PantallaPerfil extends StatelessWidget {
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 14),
           ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Diálogo «Cambiar mi nombre»: nombre nuevo + PIN actual de
+/// confirmación. Si el repositorio lo acepta, se cierra con true
+/// y el Perfil ya muestra el nombre nuevo (la sesión se actualiza
+/// y la principal redibuja).
+class _DialogoCambiarNombre extends StatefulWidget {
+  const _DialogoCambiarNombre({required this.repo, required this.nombreActual});
+
+  final RepositorioTaller repo;
+  final String nombreActual;
+
+  @override
+  State<_DialogoCambiarNombre> createState() => _DialogoCambiarNombreState();
+}
+
+class _DialogoCambiarNombreState extends State<_DialogoCambiarNombre> {
+  late final TextEditingController _nombre =
+      TextEditingController(text: widget.nombreActual);
+  final TextEditingController _pin = TextEditingController();
+  String? _error;
+  bool _guardando = false;
+
+  @override
+  void dispose() {
+    _nombre.dispose();
+    _pin.dispose();
+    super.dispose();
+  }
+
+  Future<void> _guardar() async {
+    if (_guardando) return;
+    setState(() {
+      _guardando = true;
+      _error = null;
+    });
+    try {
+      await widget.repo
+          .cambiarNombre(pinActual: _pin.text, nombreNuevo: _nombre.text);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _guardando = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Cambiar mi nombre'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _nombre,
+            decoration: const InputDecoration(labelText: 'Nombre nuevo'),
+            textCapitalization: TextCapitalization.words,
+            autofocus: true,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _pin,
+            decoration: const InputDecoration(
+                labelText: 'PIN actual (para confirmar que eres tú)'),
+            keyboardType: TextInputType.number,
+            obscureText: true,
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed:
+              _guardando ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: _guardando ? null : _guardar,
+          child: Text(_guardando ? 'Guardando…' : 'Guardar'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Diálogo «Cambiar mi PIN»: PIN actual + PIN nuevo dos veces.
+/// Las validaciones de la app son las mismas del servidor
+/// (pr_cambiar_pin): 4 a 6 dígitos y nunca 1234; el servidor
+/// tiene la última palabra. Si el cambio se acepta, se cierra
+/// con true y el Perfil avisa y cierra la sesión (el servidor
+/// revoca las sesiones al cambiar el PIN).
+class _DialogoCambiarPin extends StatefulWidget {
+  const _DialogoCambiarPin({required this.repo});
+
+  final RepositorioTaller repo;
+
+  @override
+  State<_DialogoCambiarPin> createState() => _DialogoCambiarPinState();
+}
+
+class _DialogoCambiarPinState extends State<_DialogoCambiarPin> {
+  final TextEditingController _actual = TextEditingController();
+  final TextEditingController _nuevo = TextEditingController();
+  final TextEditingController _repetir = TextEditingController();
+  String? _error;
+  bool _guardando = false;
+
+  @override
+  void dispose() {
+    _actual.dispose();
+    _nuevo.dispose();
+    _repetir.dispose();
+    super.dispose();
+  }
+
+  Future<void> _guardar() async {
+    if (_guardando) return;
+    final nuevo = _nuevo.text.trim();
+    // Validación local con los mensajes del servidor, para no
+    // gastar el viaje si el PIN nuevo ya nace mal.
+    if (!RegExp(r'^[0-9]{4,6}$').hasMatch(nuevo)) {
+      setState(
+          () => _error = 'El PIN nuevo debe tener de 4 a 6 dígitos');
+      return;
+    }
+    if (nuevo == '1234') {
+      setState(() => _error =
+          'El PIN 1234 está prohibido por seguridad: elige otro PIN');
+      return;
+    }
+    if (nuevo != _repetir.text.trim()) {
+      setState(() => _error = 'El PIN nuevo no coincide al repetirlo');
+      return;
+    }
+    setState(() {
+      _guardando = true;
+      _error = null;
+    });
+    try {
+      await widget.repo
+          .cambiarPin(pinActual: _actual.text, pinNuevo: nuevo);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _guardando = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Cambiar mi PIN'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _actual,
+            decoration:
+                const InputDecoration(labelText: 'PIN actual'),
+            keyboardType: TextInputType.number,
+            obscureText: true,
+            autofocus: true,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _nuevo,
+            decoration: const InputDecoration(
+                labelText: 'PIN nuevo (4 a 6 dígitos)'),
+            keyboardType: TextInputType.number,
+            obscureText: true,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _repetir,
+            decoration:
+                const InputDecoration(labelText: 'Repite el PIN nuevo'),
+            keyboardType: TextInputType.number,
+            obscureText: true,
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed:
+              _guardando ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: _guardando ? null : _guardar,
+          child: Text(_guardando ? 'Guardando…' : 'Guardar'),
         ),
       ],
     );

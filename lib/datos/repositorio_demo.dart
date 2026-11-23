@@ -36,6 +36,7 @@ class RepositorioDemo extends RepositorioTaller {
   DatosMecanico? _datosMecanico;
   DatosLavado? _datosLavado;
   DatosCombustible? _datosCombustible;
+  DatosInventarioUnidad? _datosInventarioUnidad;
 
   @override
   Usuario? get sesion => _sesion;
@@ -45,6 +46,8 @@ class RepositorioDemo extends RepositorioTaller {
   DatosLavado? get datosLavado => _datosLavado;
   @override
   DatosCombustible? get datosCombustible => _datosCombustible;
+  @override
+  DatosInventarioUnidad? get datosInventarioUnidad => _datosInventarioUnidad;
 
   // ---------- semilla (equivalente a la del panel demo) ----------
 
@@ -83,7 +86,10 @@ class RepositorioDemo extends RepositorioTaller {
           id: 'usr-lavado',
           nombre: 'Coordinador de Lavado',
           codigo: 'LAV-01',
-          rol: 'lavado'),
+          rol: 'lavado',
+          // Autorizado desde el panel a pasar el inventario por
+          // unidad (bandera del servidor): la demo lo muestra.
+          puedeInventarioUnidad: true),
       pin: '1234',
     ),
     (
@@ -181,14 +187,17 @@ class RepositorioDemo extends RepositorioTaller {
 
   // ---------- configuración ampliada (espejo de config-ampliada.sql) --
   // Qué tipos de combustible trabaja la empresa y el precio
-  // vigente de cada uno, más si la app muestra precios. En la
-  // demo arranca todo activo con los precios de la semilla; en
+  // vigente de cada uno, más si la app muestra precios. En
   // producción lo manda administración desde el panel y el
   // servidor rechaza lo que no cuadre con esta configuración.
+  // En la demo (orden de Miguel, 2026-11-21): la mayoría de las
+  // empresas trabajan con diésel, así que gasolina y GLP quedan
+  // DESACTIVADOS — no eliminados: se reactivan en el panel
+  // cuando una empresa los trabaje.
   final Map<String, bool> _tiposActivos = {
     'diesel': true,
-    'gasolina': true,
-    'glp': true,
+    'gasolina': false,
+    'glp': false,
   };
   final Map<String, double> _preciosVigentes = {
     'diesel': 250,
@@ -550,21 +559,30 @@ class RepositorioDemo extends RepositorioTaller {
   /// El rol que manda en pantalla ahora mismo.
   String get _vista => rolActivo ?? _sesion?.rol ?? '';
 
+  /// PINes cambiados desde el Perfil en esta corrida de la demo
+  /// (la semilla es const: el cambio vive en este mapa, espejo
+  /// de [_nombresCambiados]). El PIN que vale es el cambiado si
+  /// lo hay; si no, el de la semilla.
+  final Map<String, String> _pinesCambiados = {};
+
+  String _pinDe(({Usuario usuario, String pin}) entrada) =>
+      _pinesCambiados[entrada.usuario.id] ?? entrada.pin;
+
   @override
   Future<Usuario> iniciarSesion(String codigo, String pin) async {
     _sembrar();
     final buscado = codigo.trim().toUpperCase();
     for (final entrada in _usuarios) {
       if (entrada.usuario.codigo.toUpperCase() == buscado) {
-        if (entrada.pin != pin) {
+        if (_pinDe(entrada) != pin) {
           throw const ErrorServidor('Código o PIN incorrecto');
         }
-        _sesion = entrada.usuario;
+        _sesion = _conSuNombre(entrada.usuario);
         await _guardarSesion(entrada.usuario.id);
         fijarRolActivo(_rolInicial(entrada.usuario));
         await _prepararCola();
         notifyListeners();
-        return entrada.usuario;
+        return _sesion!;
       }
     }
     throw const ErrorServidor('Código o PIN incorrecto');
@@ -580,7 +598,7 @@ class RepositorioDemo extends RepositorioTaller {
       final id = datos['usuarioId']?.toString();
       for (final entrada in _usuarios) {
         if (entrada.usuario.id == id) {
-          _sesion = entrada.usuario;
+          _sesion = _conSuNombre(entrada.usuario);
           fijarRolActivo(_rolInicial(entrada.usuario));
           await _prepararCola();
           notifyListeners();
@@ -599,9 +617,89 @@ class RepositorioDemo extends RepositorioTaller {
     _datosMecanico = null;
     _datosLavado = null;
     _datosCombustible = null;
+    _datosInventarioUnidad = null;
     fijarRolActivo(null);
     await _borrarSesionGuardada();
     notifyListeners();
+  }
+
+  /// Nombres cambiados desde el Perfil en esta corrida de la demo
+  /// (la semilla es const: el cambio vive en este mapa y se aplica
+  /// al entrar y al restaurar la sesión). Espejo de
+  /// pr_cambiar_nombre: el PIN actual autoriza y cada quien solo
+  /// cambia el suyo.
+  final Map<String, String> _nombresCambiados = {};
+
+  Usuario _conSuNombre(Usuario u) {
+    final nuevo = _nombresCambiados[u.id];
+    if (nuevo == null || nuevo == u.nombre) return u;
+    return Usuario(
+      id: u.id,
+      nombre: nuevo,
+      codigo: u.codigo,
+      rol: u.rol,
+      rolAdicional: u.rolAdicional,
+      modoPago: u.modoPago,
+      sueldoMonto: u.sueldoMonto,
+      puedeInventarioUnidad: u.puedeInventarioUnidad,
+    );
+  }
+
+  @override
+  Future<void> cambiarNombre({
+    required String pinActual,
+    required String nombreNuevo,
+  }) async {
+    final u = _sesion;
+    if (u == null) throw const ErrorServidor('No hay sesión iniciada');
+    String? pinGuardado;
+    for (final entrada in _usuarios) {
+      if (entrada.usuario.id == u.id) pinGuardado = _pinDe(entrada);
+    }
+    if (pinGuardado == null || pinGuardado != pinActual) {
+      throw const ErrorServidor('El PIN actual no es correcto');
+    }
+    final nombre = nombreNuevo.trim();
+    if (nombre.isEmpty) {
+      throw const ErrorServidor('El nombre nuevo no puede estar vacío');
+    }
+    if (nombre.length > 120) {
+      throw const ErrorServidor(
+          'El nombre nuevo es demasiado largo (máximo 120 caracteres)');
+    }
+    _nombresCambiados[u.id] = nombre;
+    _sesion = _conSuNombre(u);
+    notifyListeners();
+  }
+
+  /// Cambiar MI PIN en la demo: mismas reglas que el servidor
+  /// (pr_cambiar_pin) — el PIN actual autoriza, el nuevo debe
+  /// tener de 4 a 6 dígitos y nunca ser 1234. Como en el
+  /// servidor, tras el cambio la sesión se cierra (el Perfil lo
+  /// hace) y se entra de nuevo con el PIN nuevo.
+  @override
+  Future<void> cambiarPin({
+    required String pinActual,
+    required String pinNuevo,
+  }) async {
+    final u = _sesion;
+    if (u == null) throw const ErrorServidor('No hay sesión iniciada');
+    String? pinGuardado;
+    for (final entrada in _usuarios) {
+      if (entrada.usuario.id == u.id) pinGuardado = _pinDe(entrada);
+    }
+    if (pinGuardado == null || pinGuardado != pinActual) {
+      throw const ErrorServidor('El PIN actual no es correcto');
+    }
+    final nuevo = pinNuevo.trim();
+    if (!RegExp(r'^[0-9]{4,6}$').hasMatch(nuevo)) {
+      throw const ErrorServidor('El PIN nuevo debe tener de 4 a 6 dígitos');
+    }
+    if (nuevo == '1234') {
+      throw const ErrorServidor(
+          'El PIN 1234 está prohibido por seguridad: elige otro PIN');
+    }
+    _pinesCambiados[u.id] = nuevo;
   }
 
   void _prepararDatos() {
@@ -617,6 +715,10 @@ class RepositorioDemo extends RepositorioTaller {
     } else {
       _datosMecanico = _construirDatosMecanico(u);
     }
+    // El inventario por unidad es transversal al rol en pantalla
+    // (lo pasa el mecánico o quien el panel autorizó): sus datos
+    // se preparan siempre que hay sesión.
+    _datosInventarioUnidad = _construirDatosInventario(u);
   }
 
   // ---------- mecánico ----------
@@ -1080,4 +1182,213 @@ class RepositorioDemo extends RepositorioTaller {
     notifyListeners();
     return nueva;
   }
+
+  // ---------- inventario por unidad (espejo local del servidor) ----------
+  //
+  // En producción estos datos vienen de pr_datos_inventario_app:
+  // la ficha VIGENTE que el administrador definió en el panel,
+  // leída del servidor en cada carga (la app no guarda listas
+  // fijas). La demo la simula con la misma plantilla base del
+  // servidor (pr__inv_plantilla_base) y las mismas reglas; la
+  // pantalla solo pinta lo que el repositorio devuelve.
+
+  final Map<String, List<_ArticuloInvDemo>> _invFichas = {};
+  final Map<String, ({String por, String en})> _invUltima = {};
+  bool _invSembrado = false;
+  int _invContador = 0;
+
+  static const _invPlantillaBase = <({String nombre, String categoria})>[
+    (nombre: 'Llanta de repuesto', categoria: 'llantas'),
+    (nombre: 'Juego de llaves de la unidad', categoria: 'llaves'),
+    (nombre: 'Gato', categoria: 'herramientas'),
+    (nombre: 'Llave de ruedas', categoria: 'herramientas'),
+    (nombre: 'Triángulo de seguridad', categoria: 'seguridad'),
+    (nombre: 'Extintor', categoria: 'seguridad'),
+    (nombre: 'Botiquín', categoria: 'seguridad'),
+    (nombre: 'Chaleco reflectivo', categoria: 'seguridad'),
+    (nombre: 'Herramientas básicas', categoria: 'herramientas'),
+  ];
+
+  void _sembrarInventario() {
+    if (_invSembrado) return;
+    _invSembrado = true;
+    List<_ArticuloInvDemo> desdePlantilla(String prefijo) => [
+          for (var i = 0; i < _invPlantillaBase.length; i++)
+            _ArticuloInvDemo(
+              id: '$prefijo-${i + 1}',
+              nombre: _invPlantillaBase[i].nombre,
+              categoria: _invPlantillaBase[i].categoria,
+              cantidad: 1,
+            ),
+        ];
+    // V-01: pasada de ayer de MEC-01; falta el extintor.
+    final ayer =
+        DateTime.now().subtract(const Duration(days: 1)).toIso8601String();
+    final ficha1 = desdePlantilla('art-v1');
+    for (final a in ficha1) {
+      a.estado = a.nombre == 'Extintor' ? 'faltante' : 'bueno';
+      a.nota = a.nombre == 'Extintor' ? 'No estaba en la unidad' : null;
+      a.ultimaRevisionEn = ayer;
+    }
+    _invFichas['veh-1'] = ficha1;
+    _invUltima['veh-1'] = (por: 'Juan Carlos Pérez', en: ayer);
+    // V-02: pasada de hoy, todo bueno.
+    final hoy = DateTime.now().toIso8601String();
+    final ficha2 = desdePlantilla('art-v2');
+    for (final a in ficha2) {
+      a.estado = 'bueno';
+      a.ultimaRevisionEn = hoy;
+    }
+    _invFichas['veh-2'] = ficha2;
+    _invUltima['veh-2'] = (por: 'Juan Carlos Pérez', en: hoy);
+  }
+
+  DatosInventarioUnidad _construirDatosInventario(Usuario u) {
+    _sembrarInventario();
+    return DatosInventarioUnidad(
+      usuario: u,
+      empresa: _empresaVista,
+      fecha: _hoy(),
+      puedePasar: u.puedePasarInventario,
+      unidades: [
+        for (final v in _vehiculos)
+          if (v.activo) _unidadInv(v),
+      ],
+    );
+  }
+
+  UnidadInventarioFicha _unidadInv(Vehiculo v) {
+    final ficha = _invFichas[v.id] ?? const <_ArticuloInvDemo>[];
+    final ultima = _invUltima[v.id];
+    final String general;
+    if (ficha.isEmpty) {
+      general = 'sin_ficha';
+    } else if (ultima == null) {
+      general = 'sin_revisar';
+    } else if (ficha.any((a) => a.estado == 'faltante')) {
+      general = 'con_faltantes';
+    } else if (ficha.any((a) => a.estado == 'danado')) {
+      general = 'con_danados';
+    } else {
+      general = 'completa';
+    }
+    return UnidadInventarioFicha(
+      vehiculo: v,
+      tieneFicha: ficha.isNotEmpty,
+      estadoGeneral: general,
+      ultimaRevisionEn: ultima?.en,
+      ultimaRevisionPor: ultima?.por,
+      numFaltantes: ficha.where((a) => a.estado == 'faltante').length,
+      numDanados: ficha.where((a) => a.estado == 'danado').length,
+      articulos: [for (final a in ficha) a.aModelo()],
+    );
+  }
+
+  @override
+  Future<void> recargarInventarioUnidad() async {
+    final u = _sesion;
+    if (u == null) return;
+    _datosInventarioUnidad = _construirDatosInventario(u);
+    notifyListeners();
+  }
+
+  /// Espejo de pr_pasar_inventario_unidad: exige el permiso, una
+  /// ficha existente y que la pasada cubra TODOS los artículos
+  /// exactamente una vez; primero valida todo y luego aplica.
+  @override
+  Future<RevisionInventario> pasarInventarioUnidad({
+    required String vehiculoId,
+    required List<MarcaArticulo> marcas,
+    String? nota,
+  }) async {
+    final u = _sesion;
+    if (u == null) throw const ErrorServidor('No hay sesión iniciada');
+    if (!u.puedePasarInventario) {
+      throw const ErrorServidor(
+          'Tu usuario no está autorizado a pasar inventario de unidades');
+    }
+    _sembrarInventario();
+    final ficha = _invFichas[vehiculoId];
+    if (ficha == null || ficha.isEmpty) {
+      throw const ErrorServidor(
+          'Esta unidad aún no tiene ficha: la crea el administrador en el panel');
+    }
+    final porId = {for (final m in marcas) m.articuloId: m};
+    if (porId.length != marcas.length ||
+        ficha.any((a) => !porId.containsKey(a.id))) {
+      throw const ErrorServidor(
+          'La pasada debe cubrir todos los artículos de la ficha');
+    }
+    for (final a in ficha) {
+      final m = porId[a.id]!;
+      if (m.estado != 'bueno' && m.estado != 'danado' && m.estado != 'faltante') {
+        throw ErrorServidor('Estado no válido para «${a.nombre}»');
+      }
+    }
+    final ahora = DateTime.now().toIso8601String();
+    var buenos = 0, danados = 0, faltantes = 0;
+    final diferencias = <DiferenciaRevision>[];
+    for (final a in ficha) {
+      final m = porId[a.id]!;
+      a.estado = m.estado;
+      a.nota =
+          (m.nota == null || m.nota!.trim().isEmpty) ? null : m.nota!.trim();
+      a.ultimaRevisionEn = ahora;
+      switch (m.estado) {
+        case 'bueno':
+          buenos++;
+        case 'danado':
+          danados++;
+          diferencias.add(DiferenciaRevision(
+              nombre: a.nombre, estado: m.estado, nota: a.nota));
+        default:
+          faltantes++;
+          diferencias.add(DiferenciaRevision(
+              nombre: a.nombre, estado: m.estado, nota: a.nota));
+      }
+    }
+    _invUltima[vehiculoId] = (por: u.nombre, en: ahora);
+    _invContador += 1;
+    final revision = RevisionInventario(
+      id: 'rev-inv-$_invContador',
+      fecha: _hoy(),
+      total: ficha.length,
+      buenos: buenos,
+      danados: danados,
+      faltantes: faltantes,
+      diferencias: diferencias,
+    );
+    _datosInventarioUnidad = _construirDatosInventario(u);
+    notifyListeners();
+    return revision;
+  }
+}
+
+/// Artículo mutable de la ficha en la demo (el modelo público es
+/// inmutable; el estado interno cambia con cada pasada).
+class _ArticuloInvDemo {
+  _ArticuloInvDemo({
+    required this.id,
+    required this.nombre,
+    required this.categoria,
+    required this.cantidad,
+  });
+
+  final String id;
+  final String nombre;
+  final String categoria;
+  final int cantidad;
+  String estado = 'sin_revisar';
+  String? nota;
+  String? ultimaRevisionEn;
+
+  ArticuloFichaUnidad aModelo() => ArticuloFichaUnidad(
+        id: id,
+        nombre: nombre,
+        categoria: categoria,
+        cantidadEsperada: cantidad,
+        estado: estado,
+        nota: nota,
+        ultimaRevisionEn: ultimaRevisionEn,
+      );
 }

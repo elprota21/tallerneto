@@ -2,21 +2,33 @@ import 'package:material_ui/material_ui.dart';
 
 import '../datos/repositorio.dart';
 import 'comun.dart';
+import 'detalle_trabajo.dart';
 
-/// Historial del mecánico: sus trabajos con filtro por estado. Si un
-/// trabajo fue rechazado, se muestra el motivo que escribió
-/// administración.
-class PantallaHistorial extends StatefulWidget {
-  const PantallaHistorial({super.key, required this.repo});
+/// MIS TRABAJOS del mecánico (antes «Historial»): sus trabajos
+/// con filtro por su estado REAL (pendiente de validación,
+/// validada, rechazada — los estados de siempre del sistema).
+/// Si un trabajo fue rechazado, se muestra el motivo que
+/// escribió administración. Tocar un trabajo abre su detalle
+/// (unidad, descripción y piezas usadas).
+class PantallaMisTrabajos extends StatefulWidget {
+  const PantallaMisTrabajos({
+    super.key,
+    required this.repo,
+    this.filtroInicial = 'todas',
+  });
 
   final RepositorioTaller repo;
 
+  /// Filtro con el que abre la lista (el Inicio lo usa para
+  /// llevar directo a «pendientes», «validadas», etc.).
+  final String filtroInicial;
+
   @override
-  State<PantallaHistorial> createState() => _PantallaHistorialState();
+  State<PantallaMisTrabajos> createState() => _PantallaMisTrabajosState();
 }
 
-class _PantallaHistorialState extends State<PantallaHistorial> {
-  String _filtro = 'todas';
+class _PantallaMisTrabajosState extends State<PantallaMisTrabajos> {
+  late String _filtro = widget.filtroInicial;
 
   static const _opciones = <(String, String)>[
     ('todas', 'Todas'),
@@ -79,61 +91,89 @@ class _PantallaHistorialState extends State<PantallaHistorial> {
                     itemBuilder: (_, i) {
                       final t = trabajos[i];
                       return Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(t.tipoNombre,
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 15)),
-                                  ),
-                                  ChipEstadoTrabajo(estado: t.estado),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => PantallaDetalleTrabajo(
+                                  trabajo: t, datos: datos),
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(t.tipoNombre,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 15)),
+                                    ),
+                                    ChipEstadoTrabajo(estado: t.estado),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(etiquetaVehiculo(t.vehiculoId)),
+                                Text(fechaCorta(t.fecha)),
+                                if (t.pendienteEnvio) ...[
+                                  const SizedBox(height: 6),
+                                  const ChipPendienteEnvio(),
                                 ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(etiquetaVehiculo(t.vehiculoId)),
-                              Text(fechaCorta(t.fecha)),
-                              if (t.pendienteEnvio) ...[
-                                const SizedBox(height: 6),
-                                const ChipPendienteEnvio(),
-                              ],
-                              if (t.descripcion != null) ...[
-                                const SizedBox(height: 4),
-                                Text(t.descripcion!),
-                              ],
-                              if (!datos.usuario.esSueldo &&
-                                  t.estado == 'validada') ...[
-                                const SizedBox(height: 4),
-                                Text(dinero(t.precio),
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w600)),
-                              ],
-                              if (t.estado == 'rechazada' &&
-                                  t.notaAdmin != null) ...[
-                                const SizedBox(height: 6),
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .errorContainer,
-                                    borderRadius: BorderRadius.circular(8),
+                                if (t.descripcion != null) ...[
+                                  const SizedBox(height: 4),
+                                  Text(t.descripcion!),
+                                ],
+                                if (!datos.usuario.esSueldo &&
+                                    t.estado == 'validada') ...[
+                                  const SizedBox(height: 4),
+                                  Text(dinero(t.precio),
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w600)),
+                                ],
+                                if (t.estado == 'rechazada' &&
+                                    t.notaAdmin != null) ...[
+                                  const SizedBox(height: 6),
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .errorContainer,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      'Motivo del rechazo: ${t.notaAdmin}',
+                                      style: TextStyle(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onErrorContainer),
+                                    ),
                                   ),
-                                  child: Text(
-                                    'Motivo del rechazo: ${t.notaAdmin}',
-                                    style: TextStyle(
+                                ],
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Icon(Icons.touch_app_outlined,
+                                        size: 14,
                                         color: Theme.of(context)
                                             .colorScheme
-                                            .onErrorContainer),
-                                  ),
+                                            .onSurfaceVariant),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Toca para ver el detalle',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant),
+                                    ),
+                                  ],
                                 ),
                               ],
-                            ],
+                            ),
                           ),
                         ),
                       );
